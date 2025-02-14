@@ -401,10 +401,10 @@ class Player:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.hp = 1000
-        self.max_hp = 1000000
-        self.base_atk = 10 # 基础攻击力
-        self.base_defense = 10 # 基础防御力
+        self.hp = 100000
+        self.max_hp = 100000
+        self.base_atk = 10000  # 基础攻击力
+        self.base_defense = 10000  # 基础防御力
         self.coins = 0
         self.equipped_weapon = None  # 当前装备的武器
         self.equipped_armor = None  # 当前装备的护甲
@@ -978,6 +978,8 @@ class Game:
         self.main_menu = MainMenu(self.screen)
         self.death_screen = None
 
+        # ------------------- 静态背景渲染 -----------------------
+        self.background_surface = None  # 新增背景Surface
         self.generate_floor()
 
         self.player = Player(self.start_pos[0], self.start_pos[1])  # 游戏生成后玩家位置
@@ -2325,6 +2327,11 @@ class Game:
         # 生成房间
         self.rooms = add_rooms(self.maze)
 
+        # 在生成完迷宫后创建背景Surface 静态渲染
+        self.background_surface = pygame.Surface((MAP_WIDTH * TILE_SIZE, MAP_HEIGHT * TILE_SIZE))
+
+        #---------------------------- 动态部分 -----------------------------
+
         # 在生成普通房间时替换为喷泉房间
         for i in range(len(self.rooms)):
             room = self.rooms[i]
@@ -2436,7 +2443,30 @@ class Game:
         self.animation_radius = 0
         self.is_animating = True  # 触发动画
 
+        # 预绘制静态背景
+        for y in range(MAP_HEIGHT):
+            for x in range(MAP_WIDTH):
+                if self.maze[y][x] == 1:
+                    self.draw_wall(x, y, self.background_surface)
+                else:
+                    self.draw_floor(x, y, self.background_surface)
+
+
         # ---------------------- 喷泉房 ----------------------
+
+
+    def draw_fountain_room(self):
+        for y in range(MAP_HEIGHT):
+            for x in range(MAP_WIDTH):
+                if self.maze[y][x] == 2:  # 喷泉区域
+                    self.draw_fountain_tile(x, y)
+                elif self.maze[y][x] == 3:  # 岩浆
+                    self.draw_lava_tile(x, y)
+                elif self.maze[y][x] == 4:  # 黑曜石雕像
+                    self.draw_obsidian_statue(x, y)
+                elif self.maze[y][x] == 5:  # 地狱地板
+                    self.draw_hell_floor(x, y)
+
 
     def create_fountain_room(self, room):
         x, y, w, h = room
@@ -3104,7 +3134,7 @@ class Game:
                 fr['y1'] <= self.player.y < fr['y2'])
 
     def spawn_slime(self):
-        slime_data = monsters_data[5]
+        slime_data = monsters_data[6]
         # 寻找可用位置
         fr = self.fountain_room
         for _ in range(10):  # 最多尝试10次
@@ -3211,56 +3241,60 @@ class Game:
                         math.radians(270), math.radians(360), 2)
 
     # 墙壁绘制方法：
-    def draw_wall(self, x, y):
+    def draw_wall(self, x, y, surface=None):
+        surface = surface or self.screen
         """使用预先生成的样式绘制墙壁"""
         style = self.tile_styles[y][x]
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 
         # 绘制基础颜色
-        pygame.draw.rect(self.screen, COLOR_STONE, rect)
+        pygame.draw.rect(surface, COLOR_STONE, rect)
 
         if style['type'] == 'moss':
-            self.draw_moss_stone(x, y, style)
+            self.draw_moss_stone(x, y, style, surface)
         elif style['type'] == 'cracked':
-            self.draw_cracked_stone(x, y, style)
+            self.draw_cracked_stone(x, y, style, surface)
         else:
-            self.draw_basic_stone(x, y, style)
+            self.draw_basic_stone(x, y, style, surface)
 
-        self.draw_stone_shading(x, y)
+        self.draw_stone_shading(x, y, surface)
 
-    def draw_basic_stone(self, x, y, style):
+    def draw_basic_stone(self, x, y, style, surface=None):
+        surface = surface or self.screen
         """绘制基础石墙（使用预生成高光点）"""
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 
         # 砖缝（保持不变）
         for i in range(0, TILE_SIZE, 6):
-            pygame.draw.line(self.screen, COLOR_SHADOW,
+            pygame.draw.line(surface, COLOR_SHADOW,
                              (rect.left + i, rect.top),
                              (rect.left + i, rect.bottom), 1)
         # 使用预生成的高光点
         for px, py in style['highlights']:
-            pygame.draw.circle(self.screen, COLOR_HIGHLIGHT,
+            pygame.draw.circle(surface, COLOR_HIGHLIGHT,
                                (rect.left + px, rect.top + py), 1)
 
-    def draw_moss_stone(self, x, y, style):
+    def draw_moss_stone(self, x, y, style, surface=None):
+        surface = surface or self.screen
         """绘制青苔石墙（使用预生成参数）"""
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 
         # 绘制预先生成的青苔点
         for px, py in style['moss_pos']:
-            pygame.draw.circle(self.screen, COLOR_MOSS,
+            pygame.draw.circle(surface, COLOR_MOSS,
                                (rect.left + px, rect.top + py), 1)
 
         # 其他固定绘制（如底部青苔带）
-        pygame.draw.rect(self.screen, COLOR_MOSS,
+        pygame.draw.rect(surface, COLOR_MOSS,
                          (rect.left + 2, rect.bottom - 4, TILE_SIZE - 4, 3))
 
-    def draw_cracked_stone(self, x, y, style):
+    def draw_cracked_stone(self, x, y, style, surface=None):
+        surface = surface or self.screen
         """绘制裂缝石墙（使用预生成参数）"""
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 
         # 主裂缝
-        pygame.draw.line(self.screen, COLOR_CRACK,
+        pygame.draw.line(surface, COLOR_CRACK,
                          (rect.left + style['crack_start'][0], rect.top + style['crack_start'][1]),
                          (rect.left + style['crack_end'][0], rect.top + style['crack_end'][1]), 2)
 
@@ -3268,11 +3302,12 @@ class Game:
         for sx, sy in style['small_cracks']:
             ex = sx + random.randint(-4, 4)
             ey = sy + random.randint(-4, 4)
-            pygame.draw.line(self.screen, COLOR_CRACK,
+            pygame.draw.line(surface, COLOR_CRACK,
                              (rect.left + sx, rect.top + sy),
                              (rect.left + ex, rect.top + ey), 1)
 
-    def draw_stone_shading(self, x, y):
+    def draw_stone_shading(self, x, y, surface=None):
+        surface = surface or self.screen
         """绘制石墙立体阴影效果"""
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 
@@ -3285,22 +3320,23 @@ class Game:
         for i in range(0, TILE_SIZE, 6):
             for j in range(0, TILE_SIZE, 6):
                 if (i + j) % 12 == 0:
-                    pygame.draw.line(self.screen, COLOR_HIGHLIGHT,
+                    pygame.draw.line(surface, COLOR_HIGHLIGHT,
                                      (rect.left + i, rect.top + j),
                                      (rect.left + i + 4, rect.top + j), 1)
-                    pygame.draw.line(self.screen, COLOR_HIGHLIGHT,
+                    pygame.draw.line(surface, COLOR_HIGHLIGHT,
                                      (rect.left + i, rect.top + j),
                                      (rect.left + i, rect.top + j + 4), 1)
 
         # 顶部高光
-        pygame.draw.line(self.screen, COLOR_HIGHLIGHT,
+        pygame.draw.line(surface, COLOR_HIGHLIGHT,
                          (rect.left, rect.top), (rect.right, rect.top), 2)
         # 左侧高光
-        pygame.draw.line(self.screen, COLOR_HIGHLIGHT,
+        pygame.draw.line(surface, COLOR_HIGHLIGHT,
                          (rect.left, rect.top), (rect.left, rect.bottom), 2)
 
     # 地面绘画方法
-    def draw_floor(self, x, y):
+    def draw_floor(self, x, y, surface=None):
+        surface = surface or self.screen
         is_fountain_room = False
         if self.fountain_room:
             if (self.fountain_room['x1'] <= x < self.fountain_room['x2'] and
@@ -3308,55 +3344,46 @@ class Game:
                 is_fountain_room = True
 
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-        if self.maze[y][x] == 2:  # 喷泉区域
-            self.draw_fountain_tile(x, y)
-        elif self.maze[y][x] == 3:  # 岩浆
-            self.draw_lava_tile(x, y)
-        elif self.maze[y][x] == 4:  # 黑曜石雕像
-            self.draw_obsidian_statue(x, y)
-        elif self.maze[y][x] == 5:  # 地狱地板
-            self.draw_hell_floor(x, y)
+        # 调整喷泉房间地板颜色和样式
+        if is_fountain_room:
+            base_color = tuple(c - 20 for c in COLOR_FLOOR)  # 更深的底色
+            pygame.draw.rect(surface, base_color, rect)
+            # 双倍裂缝密度
+            pygame.draw.line(surface, COLOR_FLOOR_CRACK,
+                             (rect.left + 2, rect.centery),
+                             (rect.right - 2, rect.centery), 2)
+            pygame.draw.line(surface, COLOR_FLOOR_CRACK,
+                             (rect.centerx, rect.top + 2),
+                             (rect.centerx, rect.bottom - 2), 2)
+            # 添加额外对角线裂缝
+            if random.random() < 0.4:
+                start_x = rect.left + random.randint(2, TILE_SIZE - 2)
+                start_y = rect.top + random.randint(2, TILE_SIZE - 2)
+                end_x = start_x + random.randint(-8, 8)
+                end_y = start_y + random.randint(-8, 8)
+                pygame.draw.line(surface, COLOR_FLOOR_CRACK,
+                                 (start_x, start_y), (end_x, end_y), 1)
         else:
-            # 调整喷泉房间地板颜色和样式
-            if is_fountain_room:
-                base_color = tuple(c - 20 for c in COLOR_FLOOR)  # 更深的底色
-                pygame.draw.rect(self.screen, base_color, rect)
-                # 双倍裂缝密度
-                pygame.draw.line(self.screen, COLOR_FLOOR_CRACK,
+            style = self.tile_styles[y][x]
+            pygame.draw.rect(surface, COLOR_FLOOR, rect)
+
+            # 水平裂缝
+            if style['crack_h']:
+                pygame.draw.line(surface, COLOR_FLOOR_CRACK,
                                  (rect.left + 2, rect.centery),
-                                 (rect.right - 2, rect.centery), 2)
-                pygame.draw.line(self.screen, COLOR_FLOOR_CRACK,
+                                 (rect.right - 2, rect.centery), 1)
+
+            # 垂直裂缝
+            if style['crack_v']:
+                pygame.draw.line(surface, COLOR_FLOOR_CRACK,
                                  (rect.centerx, rect.top + 2),
-                                 (rect.centerx, rect.bottom - 2), 2)
-                # 添加额外对角线裂缝
-                if random.random() < 0.4:
-                    start_x = rect.left + random.randint(2, TILE_SIZE - 2)
-                    start_y = rect.top + random.randint(2, TILE_SIZE - 2)
-                    end_x = start_x + random.randint(-8, 8)
-                    end_y = start_y + random.randint(-8, 8)
-                    pygame.draw.line(self.screen, COLOR_FLOOR_CRACK,
-                                     (start_x, start_y), (end_x, end_y), 1)
-            else:
-                style = self.tile_styles[y][x]
-                pygame.draw.rect(self.screen, COLOR_FLOOR, rect)
+                                 (rect.centerx, rect.bottom - 2), 1)
 
-                # 水平裂缝
-                if style['crack_h']:
-                    pygame.draw.line(self.screen, COLOR_FLOOR_CRACK,
-                                     (rect.left + 2, rect.centery),
-                                     (rect.right - 2, rect.centery), 1)
-
-                # 垂直裂缝
-                if style['crack_v']:
-                    pygame.draw.line(self.screen, COLOR_FLOOR_CRACK,
-                                     (rect.centerx, rect.top + 2),
-                                     (rect.centerx, rect.bottom - 2), 1)
-
-                # 污渍
-                if style['stain_pos']:
-                    sx, sy = style['stain_pos']
-                    pygame.draw.ellipse(self.screen, (175, 175, 175, 30),
-                                        (rect.left + sx, rect.top + sy, 6, 6))
+            # 污渍
+            if style['stain_pos']:
+                sx, sy = style['stain_pos']
+                pygame.draw.ellipse(surface, (175, 175, 175, 30),
+                                    (rect.left + sx, rect.top + sy, 6, 6))
 
     # 右侧绘画怪物动态属性面板
     def draw_side_panel(self):
@@ -3844,16 +3871,13 @@ class Game:
                 self.screen.blit(halo, (x - 2, y - 2))
 
     def draw(self):
-        self.screen.fill((0, 0, 0))
-        for y in range(MAP_HEIGHT):
-            for x in range(MAP_WIDTH):
-                if self.maze[y][x] == 1:
-                    self.draw_wall(x, y)
-                else:
-                    self.draw_floor(x, y)
+        # 绘制静态背景
+        self.screen.blit(self.background_surface, (0, 0))
 
         # 绘制向上的楼梯
         self.draw_stairs(self.screen, self.exit_pos[0] * TILE_SIZE, self.exit_pos[1] * TILE_SIZE, TILE_SIZE)
+
+        self.draw_fountain_room()
 
         # 绘制路径
         self.draw_path()
