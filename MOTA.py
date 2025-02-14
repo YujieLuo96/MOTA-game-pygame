@@ -10,11 +10,20 @@ COLOR_BUTTON_HOVER = (120, 120, 120)
 COLOR_UI_TEXT = (200, 160, 60)
 COLOR_DEATH_RED = (139, 0, 0)
 
+SIDEBAR_WIDTH = 300  # 右侧属性栏宽度
+
 TILE_SIZE = 35
 MAP_WIDTH = 37  # 必须为奇数，方便生成迷宫
 MAP_HEIGHT = 37
 
-SIDEBAR_WIDTH = 300  # 右侧属性栏宽度
+# 屏幕尺寸
+CONFIG = {
+    "SCREEN_WIDTH": MAP_WIDTH * TILE_SIZE + 2 * SIDEBAR_WIDTH,
+    "SCREEN_HEIGHT": MAP_HEIGHT * TILE_SIZE,
+    "TILE_SIZE": TILE_SIZE,
+    "MAP_WIDTH": MAP_WIDTH,
+    "MAP_HEIGHT": MAP_HEIGHT
+}
 
 # 在常量设置中增加消息日志区域的高度
 SCREEN_WIDTH = MAP_WIDTH * TILE_SIZE + 2 * SIDEBAR_WIDTH
@@ -53,7 +62,7 @@ MAX_ROOM_SIZE = 19
 
 # 路径效果
 
-PATHTIME = 0.3 # 路径显示时长 秒
+PATHTIME = 0.35 # 路径显示时长 秒
 ORDINARYEFFECT = True
 LIGHTNINGEFFECT_RED = False
 LIGHTNINGEFFECT_YELLOW = False
@@ -101,15 +110,15 @@ monsters_data = [
     {"name": "电击球", "HP": 200, "ATK": 40, "DEF": 15, "size": (1, 1), "coin": 50, "speed": 4, "level": 2},
     {"name": "异色电击球", "HP": 220, "ATK": 44, "DEF": 18, "size": (1, 1), "coin": 55, "speed": 4, "level": 2},
     {"name": "魔法师", "HP": 120, "ATK": 35, "DEF": 12, "size": (1, 2), "coin": 60, "speed": 35, "level": 3},
-    {"name": "魔王", "HP": 1000, "ATK": 50, "DEF": 20, "size": (2, 2), "coin": 300, "speed": 50, "level": 4},
-    {"name": "圣洁魔王", "HP": 1100, "ATK": 55, "DEF": 22, "size": (2, 2), "coin": 330, "speed": 45, "level": 5},
-    {"name": "普通巨龙", "HP": 5000, "ATK": 110, "DEF": 50, "size": (3, 3), "coin": 1200, "speed": 60, "level": 5},
-    {"name": "冰霜巨龙", "HP": 5500, "ATK": 130, "DEF": 55, "size": (3, 3), "coin": 1300, "speed": 60, "level": 6},
+    {"name": "魔王", "HP": 1000, "ATK": 50, "DEF": 20, "size": (2, 2), "coin": 300, "speed": 50, "level": 5},
+    {"name": "圣洁魔王", "HP": 1100, "ATK": 55, "DEF": 22, "size": (2, 2), "coin": 330, "speed": 45, "level": 6},
+    {"name": "普通巨龙", "HP": 5000, "ATK": 110, "DEF": 50, "size": (3, 3), "coin": 1200, "speed": 60, "level": 7},
+    {"name": "冰霜巨龙", "HP": 5500, "ATK": 130, "DEF": 55, "size": (3, 3), "coin": 1300, "speed": 60, "level": 8},
     {"name": "血腥闪电", "HP": 6000, "ATK": 200, "DEF": 110, "size": (3, 3), "coin": 1500, "speed": 30, "level": 7},
     {"name": "纯青闪电", "HP": 7000, "ATK": 300, "DEF": 130, "size": (3, 3), "coin": 2000, "speed": 30, "level": 8},
     {"name": "金色闪电", "HP": 8000, "ATK": 400, "DEF": 150, "size": (3, 3), "coin": 2500, "speed": 30, "level": 9},
-    {"name": "火焰领主", "HP": 6500, "ATK": 130, "DEF": 60, "size": (3, 3), "coin": 1500, "speed": 60, "level": 7},
-    {"name": "纯火焰领主", "HP": 7500, "ATK": 180, "DEF": 80, "size": (3, 3), "coin": 1900, "speed": 50, "level": 8}
+    {"name": "火焰领主", "HP": 6500, "ATK": 130, "DEF": 60, "size": (3, 3), "coin": 1500, "speed": 60, "level": 8},
+    {"name": "纯火焰领主", "HP": 7500, "ATK": 180, "DEF": 80, "size": (3, 3), "coin": 1900, "speed": 50, "level": 9}
 ]
 
 # 道具类型
@@ -139,15 +148,199 @@ EQUIPMENT_TYPES = {
 
 # -------- UI类 --------
 
+class SettingsMenu:
+    def __init__(self, screen):
+        self.screen = screen
+        self.font = pygame.font.Font(None, 36)
+        self.back_button = pygame.Rect(50, 400, 200, 50)
+        self.apply_button = pygame.Rect(300, 400, 200, 50)
+        self.sliders = [
+            {"label": "Map Width", "value": CONFIG["MAP_WIDTH"], "min": 21, "max": 51,
+             "rect": pygame.Rect(100, 100, 400, 20)},
+            {"label": "Map Height", "value": CONFIG["MAP_HEIGHT"], "min": 21, "max": 51,
+             "rect": pygame.Rect(100, 150, 400, 20)},
+            {"label": "Tile Size", "value": CONFIG["TILE_SIZE"], "min": 20, "max": 80,
+             "rect": pygame.Rect(100, 200, 400, 20)}
+        ]
+        self.dragging = None
+
+    def draw_slider(self, slider, y):
+        pygame.draw.rect(self.screen, (200, 200, 200), slider["rect"])
+        ratio = (slider["value"] - slider["min"]) / (slider["max"] - slider["min"])
+        handle_x = slider["rect"].x + ratio * (slider["rect"].width - 20)
+        pygame.draw.rect(self.screen, (0, 128, 255), (handle_x, slider["rect"].y - 10, 20, 40))
+
+        label = self.font.render(f"{slider['label']}: {slider['value']}", True, (255, 255, 255))
+        self.screen.blit(label, (slider["rect"].x, slider["rect"].y - 40))
+
+    def draw(self):
+        self.screen.fill((30, 30, 50))
+        for slider in self.sliders:
+            self.draw_slider(slider, slider["rect"].y)
+
+        # 绘制按钮
+        pygame.draw.rect(self.screen, (70, 70, 70), self.back_button)
+        back_text = self.font.render("Back", True, (255, 255, 255))
+        self.screen.blit(back_text, (self.back_button.x + 70, self.back_button.y + 15))
+
+        pygame.draw.rect(self.screen, (70, 70, 70), self.apply_button)
+        apply_text = self.font.render("Apply", True, (255, 255, 255))
+        self.screen.blit(apply_text, (self.apply_button.x + 70, self.apply_button.y + 15))
+
+        pygame.display.flip()
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            for i, slider in enumerate(self.sliders):
+                if slider["rect"].collidepoint(event.pos):
+                    self.dragging = i
+            if self.back_button.collidepoint(event.pos):
+                return "menu"
+            elif self.apply_button.collidepoint(event.pos):
+                CONFIG["SCREEN_WIDTH"] = self.sliders[0]["value"] * self.sliders[2]["value"] + 600
+                CONFIG["SCREEN_HEIGHT"] = self.sliders[1]["value"] * self.sliders[2]["value"]
+                CONFIG["TILE_SIZE"] = self.sliders[2]["value"]
+                CONFIG["MAP_WIDTH"] = self.sliders[0]["value"]
+                CONFIG["MAP_HEIGHT"] = self.sliders[1]["value"]
+                return "apply"
+
+        elif event.type == pygame.MOUSEBUTTONUP:
+            self.dragging = None
+
+        elif event.type == pygame.MOUSEMOTION and self.dragging is not None:
+            slider = self.sliders[self.dragging]
+            x = min(max(event.pos[0], slider["rect"].x), slider["rect"].x + slider["rect"].width)
+            ratio = (x - slider["rect"].x) / slider["rect"].width
+            slider["value"] = int(slider["min"] + ratio * (slider["max"] - slider["min"]))
+
+        return "settings"
+
+
+class DungeonButton:
+    def __init__(self, rect, text, font_size=32):
+        self.rect = rect
+        self.text = text
+        self.font = pygame.font.Font(None, font_size)
+        self.hover = False
+        self.flame_offset = 0  # 火焰动画偏移量
+
+    def draw(self, surface):
+        # 动态更新火焰偏移
+        self.flame_offset = (self.flame_offset + 2) % 20
+
+        # 基础石板
+        self._draw_stone_base(surface)
+
+        # 金属镶边
+        self._draw_metal_trim(surface)
+
+        # 动态火焰效果（仅悬停时）
+        if self.hover:
+            self._draw_flame_effect(surface)
+
+        # 按钮文字
+        self._draw_text(surface)
+
+    def _draw_stone_base(self, surface):
+        # 石板基底
+        base_color = (60, 60, 60) if not self.hover else (80, 80, 80)
+        pygame.draw.rect(surface, base_color, self.rect, border_radius=8)
+
+        # 石头纹理
+        for _ in range(40):  # 随机石纹斑点
+            x = self.rect.x + random.randint(2, self.rect.w - 4)
+            y = self.rect.y + random.randint(2, self.rect.h - 4)
+            size = random.choice([1, 1, 1, 2])
+            color = random.choice([(70, 70, 70), (50, 50, 50), (90, 90, 90)])
+            pygame.draw.circle(surface, color, (x, y), size)
+
+        # 立体凹痕
+        pygame.draw.line(surface, (40, 40, 40),
+                         (self.rect.left + 5, self.rect.centery),
+                         (self.rect.right - 5, self.rect.centery), 3)
+        pygame.draw.line(surface, (40, 40, 40),
+                         (self.rect.centerx, self.rect.top + 5),
+                         (self.rect.centerx, self.rect.bottom - 5), 3)
+
+    def _draw_metal_trim(self, surface):
+        # 青铜镶边
+        trim_color1 = (198, 155, 93)  # 青铜色
+        trim_color2 = (150, 120, 70)  # 暗部
+        border_rect = self.rect.inflate(-4, -4)
+
+        # 渐变金属效果
+        for i in range(4):
+            color = (
+                trim_color1[0] + (trim_color2[0] - trim_color1[0]) * i / 4,
+                trim_color1[1] + (trim_color2[1] - trim_color1[1]) * i / 4,
+                trim_color1[2] + (trim_color2[2] - trim_color1[2]) * i / 4
+            )
+            pygame.draw.rect(surface, color, border_rect.inflate(-i * 2, -i * 2),
+                             border_radius=8 - i, width=2)
+
+        # 铆钉装饰
+        for x in [border_rect.left + 8, border_rect.right - 8]:
+            for y in [border_rect.top + 8, border_rect.bottom - 8]:
+                pygame.draw.circle(surface, (250, 250, 200), (x, y), 3)
+                pygame.draw.circle(surface, (150, 150, 100), (x, y), 3, 1)
+
+    def _draw_flame_effect(self, surface):
+        # 火焰粒子效果
+        for i in range(3):
+            offset = self.flame_offset + i * 7
+            if offset > 20: continue
+
+            # 火焰主体
+            flame_rect = pygame.Rect(
+                self.rect.centerx - 15 + offset,
+                self.rect.top - 15,
+                30, 30
+            )
+
+            # 火焰颜色渐变
+            for j, color in enumerate([(255, 100, 0, 150), (255, 200, 0, 80), (255, 255, 200, 40)]):
+                temp_surf = pygame.Surface((30, 30), pygame.SRCALPHA)
+                pygame.draw.ellipse(temp_surf, color, (0, j * 5, 30, 30 - j * 10))
+                surface.blit(temp_surf, flame_rect)
+
+            # 火星粒子
+            for _ in range(5):
+                x = flame_rect.centerx + random.randint(-8, 8)
+                y = flame_rect.centery + random.randint(-5, 5)
+                pygame.draw.circle(surface, (255, 255, 200, 150), (x, y), 1)
+
+    def _draw_text(self, surface):
+        # 文字阴影效果
+        text_surf = self.font.render(self.text, True, (30, 30, 30))
+        shadow_rect = text_surf.get_rect(center=(self.rect.centerx + 2, self.rect.centery + 2))
+        surface.blit(text_surf, shadow_rect)
+
+        # 主文字
+        text_color = (200, 160, 60) if not self.hover else (255, 200, 100)
+        text_surf = self.font.render(self.text, True, text_color)
+        text_rect = text_surf.get_rect(center=self.rect.center)
+        surface.blit(text_surf, text_rect)
+
 class MainMenu:
     def __init__(self, screen):
         self.screen = screen
         self.font_title = pygame.font.Font(None, 72)  # 使用默认字体
-        self.font_button = pygame.font.Font(None, 36)  # 使用默认字体
         self.background = self.create_stone_texture()
         self.torch_frames = self.create_torch_frames()  # 动态生成火炬动画帧
         self.torch_index = 0
         self.torch_timer = 0
+
+        # 使用 DungeonButton 创建按钮
+        self.start_button = DungeonButton(
+            pygame.Rect(0, 0, 300, 80), "Enter the Dungeon", 36
+        )
+        self.start_button.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT * 2 // 3)
+
+        self.settings_button = DungeonButton(
+            pygame.Rect(0, 0, 280, 70), "Settings", 32
+        )
+        self.settings_button.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT * 3 // 4)
+
 
     # --------绘制火炬 -------
     def create_torch_frames(self):
@@ -257,6 +450,15 @@ class MainMenu:
         title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
         self.screen.blit(title_surf, title_rect)
 
+        # 按钮悬停状态
+        mouse_pos = pygame.mouse.get_pos()
+        self.start_button.hover = self.start_button.rect.collidepoint(mouse_pos)
+        self.settings_button.hover = self.settings_button.rect.collidepoint(mouse_pos)
+
+        # 绘制按钮
+        self.start_button.draw(self.screen)
+        self.settings_button.draw(self.screen)
+
         # 计算火炬位置
         torch_spacing = 50  # 标题与火炬间距
 
@@ -287,30 +489,8 @@ class MainMenu:
                          (title_rect.left - 50, title_rect.centery),
                          (title_rect.right + 50, title_rect.centery), 3)
 
-        # 绘制开始按钮
-        button_rect = pygame.Rect(0, 0, 300, 80)
-        button_rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT * 2 // 3)
-        mouse_pos = pygame.mouse.get_pos()
-        is_hover = button_rect.collidepoint(mouse_pos)
-
-        # 按钮3D效果
-        button_color = COLOR_BUTTON_HOVER if is_hover else COLOR_BUTTON
-        pygame.draw.rect(self.screen, button_color, button_rect, border_radius=10)
-        pygame.draw.line(self.screen, COLOR_HIGHLIGHT,
-                         (button_rect.left + 5, button_rect.top + 5),
-                         (button_rect.right - 5, button_rect.top + 5), 5)
-        # 按钮铁链装饰
-        chain_y = button_rect.top - 15
-        for x in range(button_rect.left + 20, button_rect.right - 20, 25):
-            pygame.draw.arc(self.screen, (80, 80, 80),
-                            (x, chain_y, 20, 20), math.radians(180), math.radians(360), 3)
-
-        # 按钮文字
-        text_surf = self.font_button.render("Enter the Dungeon", True, COLOR_TEXT)
-        text_rect = text_surf.get_rect(center=button_rect.center)
-        self.screen.blit(text_surf, text_rect)
-
-        return button_rect  # 返回按钮区域用于点击检测
+        # 返回按钮区域用于点击检测
+        return [self.start_button.rect, self.settings_button.rect]
 
 
 class DeathScreen:
@@ -400,10 +580,10 @@ class Player:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.hp = 100000
+        self.hp = 1000
         self.max_hp = 100000
-        self.base_atk = 10000  # 基础攻击力
-        self.base_defense = 10000  # 基础防御力
+        self.base_atk = 25  # 基础攻击力
+        self.base_defense = 25  # 基础防御力
         self.coins = 0
         self.equipped_weapon = None  # 当前装备的武器
         self.equipped_armor = None  # 当前装备的护甲
@@ -863,7 +1043,7 @@ def shop_screen(screen, player):
 
 
 # -------- 迷宫生成函数 --------
-def generate_maze(width, height):
+def generate_maze(width=CONFIG["MAP_WIDTH"], height=CONFIG["MAP_HEIGHT"]):
     maze = [[1 for _ in range(width)] for _ in range(height)]
     start_x = random.randrange(1, width, 2)
     start_y = random.randrange(1, height, 2)
@@ -919,9 +1099,13 @@ class Game:
     # 在Game类的__init__方法中调整窗口大小
     def __init__(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF)
+        self.apply_config()  # 应用配置
+        self.screen = pygame.display.set_mode((CONFIG["SCREEN_WIDTH"], CONFIG["SCREEN_HEIGHT"]),
+                                            pygame.HWSURFACE | pygame.DOUBLEBUF)
         # pygame.display.set_caption("魔塔游戏")
         self.clock = pygame.time.Clock()
+        self.game_state = "menu"
+        self.main_menu = MainMenu(self.screen)  # 确保 MainMenu 被正确初始化
         self.floor = 1
         self.tile_styles = []  # 用于存储地砖样式数据
 
@@ -988,6 +1172,16 @@ class Game:
         self.lightning_path_red = LIGHTNINGEFFECT_RED
         self.lightning_path_yellow = LIGHTNINGEFFECT_YELLOW
         self.lightning_path_blue = LIGHTNINGEFFECT_BLUE
+
+        # ------------------- 设置初始化函数 --------------------
+
+    def apply_config(self):
+        global MAP_WIDTH, MAP_HEIGHT, TILE_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT
+        MAP_WIDTH = CONFIG["MAP_WIDTH"]
+        MAP_HEIGHT = CONFIG["MAP_HEIGHT"]
+        TILE_SIZE = CONFIG["TILE_SIZE"]
+        SCREEN_WIDTH = CONFIG["SCREEN_WIDTH"]
+        SCREEN_HEIGHT = CONFIG["SCREEN_HEIGHT"]
 
         # ------------------- 更新移动动画效果 ---------------------
     def set_path_effect(self):
@@ -4169,25 +4363,51 @@ class Game:
         while True:
             dt = self.clock.tick(60) / 1000  # 获取帧间隔时间（秒），并转换为秒
             if self.game_state == "menu":
-                self.handle_main_menu()
+                action = self.handle_main_menu()
+                if action == "settings":
+                    self.game_state = "settings"
+            elif self.game_state == "settings":
+                action = self.handle_settings()
+                if action == "menu":
+                    self.game_state = "menu"
+                elif action == "apply":
+                    self.restart_game()
             elif self.game_state == "playing":
                 self.handle_game_loop(dt)
             elif self.game_state == "dead":
                 self.handle_death_screen()
 
     def handle_main_menu(self):
+        button_rects = self.main_menu.draw()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:
-                    button_rect = self.main_menu.draw()
-                    if button_rect.collidepoint(event.pos):
-                        self.game_state = "playing"
-
-        self.main_menu.draw()
+                if button_rects[0].collidepoint(event.pos):  # 开始按钮
+                    self.game_state = "playing"
+                elif button_rects[1].collidepoint(event.pos):  # 设置按钮
+                    self.game_state = "settings"
         pygame.display.flip()
+
+    def handle_settings(self):
+        settings_menu = SettingsMenu(self.screen)
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                result = settings_menu.handle_event(event)
+                if result == "menu":
+                    return "menu"
+                elif result == "apply":
+                    return "apply"
+            settings_menu.draw()
+
+    def restart_game(self):
+        self.apply_config()
+        self.__init__()  # 重新初始化游戏
 
     def handle_game_loop(self, dt):
         # 原有游戏主循环逻辑
