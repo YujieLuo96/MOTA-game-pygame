@@ -10,16 +10,15 @@ COLOR_BUTTON_HOVER = (120, 120, 120)
 COLOR_UI_TEXT = (200, 160, 60)
 COLOR_DEATH_RED = (139, 0, 0)
 
-TILE_SIZE = 31
-MAP_WIDTH = 35  # 必须为奇数，方便生成迷宫
-MAP_HEIGHT = 35
+TILE_SIZE = 35
+MAP_WIDTH = 37  # 必须为奇数，方便生成迷宫
+MAP_HEIGHT = 37
 
 SIDEBAR_WIDTH = 300  # 右侧属性栏宽度
 
 # 在常量设置中增加消息日志区域的高度
-LOG_AREA_HEIGHT = 100  # 消息日志区域高度
 SCREEN_WIDTH = MAP_WIDTH * TILE_SIZE + 2 * SIDEBAR_WIDTH
-SCREEN_HEIGHT = MAP_HEIGHT * TILE_SIZE + LOG_AREA_HEIGHT  # 增加窗口高度
+SCREEN_HEIGHT = MAP_HEIGHT * TILE_SIZE  # 增加窗口高度
 
 # 颜色定义
 # 墙壁相关颜色
@@ -2047,8 +2046,10 @@ class Game:
             core_color = (0, 155 - int(100 * math.sin(anim_time / 300)), 205 - int(50 * (-math.sin(anim_time / 300))))
         else:
             core_color = (255, 100 + int(100 * math.sin(anim_time / 300)), 50 + int(50 * (-math.sin(anim_time / 300))))
+
+        core_pos = (x + TILE_SIZE * 1.85, y + TILE_SIZE * 1.5)
         pygame.draw.circle(self.screen, core_color,
-                           (x + TILE_SIZE * 1.85, y + TILE_SIZE * 1.5), 20)
+                           core_pos, 20)
         period = 5
         for i in range(period):
             if "纯" in monster.name:
@@ -2066,12 +2067,15 @@ class Game:
                                     y + TILE_SIZE * 1.5 + int(
                                         TILE_SIZE * 0.9 * math.cos(anim_time / 200 + 2 * i * math.pi / period))), 5)
 
+        length_vertical = 0.45 * TILE_SIZE
+        length_horizontal = 0.12 * TILE_SIZE
+
         # 头部火焰
         flame_points = [
-            (x + 46, y + 45),
-            (x + 56, y + 30),
-            (x + 66, y + 45),
-            (x + 56, y + 60)
+            (x + TILE_SIZE * 1.85 - length_horizontal, y + TILE_SIZE * 1.5),
+            (x + TILE_SIZE * 1.85, y + TILE_SIZE * 1.5 + length_vertical),
+            (x + TILE_SIZE * 1.85 + length_horizontal, y + TILE_SIZE * 1.5),
+            (x + TILE_SIZE * 1.85, y + TILE_SIZE * 1.5 - length_vertical)
         ]
         if "纯" in monster.name:
             pygame.draw.polygon(self.screen, (0, 100 - int(100 * math.sin(anim_time / 300)), 100), flame_points)
@@ -2379,6 +2383,7 @@ class Game:
                             for dy in range(boss["size"][1]):
                                 occupied.add((center[0] + dx, center[1] + dy))  # 记录boss占位
                         break
+
 
         # 生成其他怪物
         eligible_monsters = []
