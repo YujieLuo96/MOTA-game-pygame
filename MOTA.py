@@ -117,8 +117,8 @@ monsters_data = [
     {"name": "血腥闪电", "HP": 6000, "ATK": 200, "DEF": 110, "size": (3, 3), "coin": 1500, "speed": 30, "level": 7},
     {"name": "纯青闪电", "HP": 7000, "ATK": 300, "DEF": 130, "size": (3, 3), "coin": 2000, "speed": 30, "level": 8},
     {"name": "金色闪电", "HP": 8000, "ATK": 400, "DEF": 150, "size": (3, 3), "coin": 2500, "speed": 30, "level": 9},
-    {"name": "火焰领主", "HP": 6500, "ATK": 130, "DEF": 60, "size": (3, 3), "coin": 1500, "speed": 60, "level": 8},
-    {"name": "纯火焰领主", "HP": 7500, "ATK": 180, "DEF": 80, "size": (3, 3), "coin": 1900, "speed": 50, "level": 9}
+    {"name": "火焰领主", "HP": 6500, "ATK": 130, "DEF": 60, "size": (3, 3), "coin": 1500, "speed": 60, "level": 7},
+    {"name": "纯火焰领主", "HP": 7500, "ATK": 180, "DEF": 80, "size": (3, 3), "coin": 1900, "speed": 50, "level": 8}
 ]
 
 # 道具类型
@@ -1374,10 +1374,12 @@ class Game:
                                int(ball['size'] * abs(math.sin(anim_time / 100))))
 
             # 绘制闪电连接
-            if i < 6:
-                next_ball = self.lightning_balls[(i + 1) % 6]
-                self.draw_lightning(ball['pos'], next_ball['pos'], 4, ball_colors[i])
-                self.draw_lightning(ball['pos'], next_ball['pos'], 9, ball_colors[i])
+            self.draw_lightning((x + TILE_SIZE * 1.5 + math.sin(anim_time / 200 + i) * TILE_SIZE * self.radius_large,
+                y + TILE_SIZE * 1.5 + math.cos(anim_time / 300 + i) * TILE_SIZE * self.radius_large), (x + TILE_SIZE * 1.5 + math.sin(anim_time / 200 + (i+1)%6) * TILE_SIZE * self.radius_large,
+                y + TILE_SIZE * 1.5 + math.cos(anim_time / 300 + (i+1)%6) * TILE_SIZE * self.radius_large), 4, ball_colors[i])
+            self.draw_lightning((x + TILE_SIZE * 1.5 + math.sin(anim_time / 200 + i) * TILE_SIZE * self.radius_large,
+                y + TILE_SIZE * 1.5 + math.cos(anim_time / 300 + i) * TILE_SIZE * self.radius_large), (x + TILE_SIZE * 1.5 + math.sin(anim_time / 200 + (i+1)%6) * TILE_SIZE * self.radius_large,
+                y + TILE_SIZE * 1.5 + math.cos(anim_time / 300 + (i+1)%6) * TILE_SIZE * self.radius_large), 9, ball_colors[i])
 
     def draw_lightning(self, start, end, thickness, color):
         """绘制闪电效果，增加分叉和火花效果"""
@@ -1391,7 +1393,7 @@ class Game:
             end_pos = main_points[i + 1]
             # 主闪电颜色随机变化
             main_color = random.choice(
-                [color, (min(color[0] + 50, 255), min(color[1] + 50, 255), min(color[2] + 50, 255))])
+                [color, (min(color[0] + 50, 255), min(color[1] + 50, 255), min(color[2] + 50, 255)), ( max(color[0] - 50, 0), max(color[1] - 50, 0), max(color[2] - 50, 0))])
             pygame.draw.line(self.screen, main_color, start_pos, end_pos, lthickness)
 
             # 50%概率生成分叉闪电
@@ -1410,11 +1412,12 @@ class Game:
                                      branch_points[j], branch_points[j + 1], max(1, lthickness - 1))
 
                 # 在分叉点添加离子火花
-                if random.random() < 0.05:
+                if random.random() < 0.02:
                     self.add_ion_sparks(mid_point, intensity=0.5)
 
+
         # 添加主路径火花
-        if random.random() < 0.1:
+        if random.random() < 0.04:
             self.add_ion_sparks(end)
 
     # 生成闪电路径点，增加随机分叉
@@ -1450,8 +1453,8 @@ class Game:
         """添加离子火花效果"""
         for _ in range(int(15 * intensity)):
             angle = random.uniform(0, 2 * math.pi)
-            speed = random.uniform(1, 10) * intensity
-            lifespan = random.uniform(0.5, 1.5)
+            speed = random.uniform(1, 6) * intensity
+            lifespan = random.uniform(0.3, 1.5)
 
             # 随机颜色（黄白色系）
             spark_color = random.choice([
@@ -2288,12 +2291,12 @@ class Game:
                     pygame.draw.circle(self.screen, (0, 155 - j * 50, 255),
                                        (int(px), int(py)), size)
                     self.draw_lightning((int(px), int(py)), (int(px), int(py)), 9 - j,
-                                        (0, 155 - j * 50, 255, int(255 * (self.path_timer / (PATHTIME * 30)))))
+                                        (0, 155 - j * 50, 255))
                 else:
                     pygame.draw.circle(self.screen, (255, 100 + j * 50, 0),
                                        (int(px), int(py)), size)
                     self.draw_lightning((int(px), int(py)), (int(px), int(py)), 9 - j,
-                                        (255, 100 + j * 50, 0, int(255 * (self.path_timer / (PATHTIME * 30)))))
+                                        (255, 100 + j * 50, 0))
 
 
         # 动态粒子
@@ -2510,11 +2513,11 @@ class Game:
                         pygame.draw.line(self.screen, (255, 255, 0, int(255 * (self.path_timer / (PATHTIME * 30)))),
                                          start_pos, end_pos, 3)
                     if self.lightning_path_yellow:
-                        self.draw_lightning(start_pos, end_pos, 4, (255, 255, 0, int(255 * (self.path_timer / (PATHTIME * 30)))))
+                        self.draw_lightning(start_pos, end_pos, 4, (255, 255, 0))
                     if self.lightning_path_blue:
-                        self.draw_lightning(start_pos, end_pos, 4, (51, 51, 255, int(255 * (self.path_timer / (PATHTIME * 30)))))
+                        self.draw_lightning(start_pos, end_pos, 4, (51, 51, 255))
                     if self.lightning_path_red:
-                        self.draw_lightning(start_pos, end_pos, 4, (255, 51, 51, int(255 * (self.path_timer / (PATHTIME * 30)))))
+                        self.draw_lightning(start_pos, end_pos, 4, (255, 51, 51))
             # 减少计时器
             self.path_timer -= 1
 
@@ -2935,7 +2938,7 @@ class Game:
 
         elif item.item_type == "CHEST":
             coins = math.ceil(
-                random.randint(5, 50) * random.randint(1, 3) * random.randint(1, 3) / random.randint(1, 3))
+                self.floor * random.randint(5, 50) * random.randint(1, 3) * random.randint(1, 3) / random.randint(1, 3))
             self.player.coins += coins
             self.add_message(f"Chest, gain {coins} coin")
         elif item.item_type == "HP_SMALL":
@@ -2945,11 +2948,11 @@ class Game:
             self.player.hp = min(self.player.hp + 500, self.player.max_hp)
             self.add_message("Large HP portion, HP +500")
         elif item.item_type == "ATK_GEM":
-            atk = random.randint(1, 4)
+            atk = random.randint(1, 4) * self.floor
             self.player.base_atk += atk
             self.add_message(f"ATK gem, ATK +{atk}")
         elif item.item_type == "DEF_GEM":
-            defend = random.randint(1, 4)
+            defend = random.randint(1, 4) * self.floor
             self.player.base_defense += defend
             self.add_message(f"DEF gem, DEF +{defend}")
 
