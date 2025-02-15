@@ -965,7 +965,7 @@ class Item:
 
 
 # -------------------------- 商店界面 -------------------------
-def shop_screen(screen, player):
+def shop_screen(screen, player, floor):
     # 使用半透明遮罩层实现模态对话框效果
     font = pygame.font.SysFont("Arial", 24)
     clock = pygame.time.Clock()
@@ -990,12 +990,12 @@ def shop_screen(screen, player):
         title = font.render("[Game Shop]", True, COLOR_TEXT)
         shop_window.blit(title, (20, 20))
         # 显示商店选项
-        option1 = font.render("1. HP +1000 (Costs 100 Coin)", True, COLOR_TEXT)
-        option2 = font.render("2. ATK +5    (Costs 100 Coin)", True, COLOR_TEXT)
-        option3 = font.render("3. DEF +5   (Costs 100 Coin)", True, COLOR_TEXT)
-        option4 = font.render("4. HP +10000 (Costs 1000 Coin)", True, COLOR_TEXT)
-        option5 = font.render("5. ATK +50    (Costs 1000 Coin)", True, COLOR_TEXT)
-        option6 = font.render("6. DEF +50   (Costs 1000 Coin)", True, COLOR_TEXT)
+        option1 = font.render(f"1. HP +{1000 * floor} (Costs {100 * floor} Coin)", True, COLOR_TEXT)
+        option2 = font.render(f"2. ATK +{5 * floor} (Costs {100 * floor} Coin)", True, COLOR_TEXT)
+        option3 = font.render(f"3. DEF +{5 * floor} (Costs {100 * floor} Coin)", True, COLOR_TEXT)
+        option4 = font.render(f"4. HP +{10000 * floor} (Costs {1000 * floor} Coin)", True, COLOR_TEXT)
+        option5 = font.render(f"5. ATK +{50 * floor} (Costs {1000 * floor} Coin)", True, COLOR_TEXT)
+        option6 = font.render(f"6. DEF +{50 * floor} (Costs {1000 * floor} Coin)", True, COLOR_TEXT)
         shop_window.blit(option1, (20, 60))
         shop_window.blit(option2, (20, 100))
         shop_window.blit(option3, (20, 140))
@@ -1017,29 +1017,29 @@ def shop_screen(screen, player):
                 if event.key == pygame.K_ESCAPE:
                     running = False
                 elif event.key == pygame.K_1:
-                    if player.coins >= 100:
-                        player.hp = min(player.hp + 1000, player.max_hp)
-                        player.coins -= 100
+                    if player.coins >= 100 * floor:
+                        player.hp = min(player.hp + 1000 * floor, player.max_hp)
+                        player.coins -= 100 * floor
                 elif event.key == pygame.K_2:
-                    if player.coins >= 100:
-                        player.base_atk += 5
-                        player.coins -= 100
+                    if player.coins >= 100 * floor:
+                        player.base_atk += 5 * floor
+                        player.coins -= 100 * floor
                 elif event.key == pygame.K_3:
-                    if player.coins >= 100:
-                        player.base_defense += 5
-                        player.coins -= 100
+                    if player.coins >= 100 * floor:
+                        player.base_defense += 5 * floor
+                        player.coins -= 100 * floor
                 elif event.key == pygame.K_4:
-                    if player.coins >= 1000:
-                        player.hp = min(player.hp + 10000, player.max_hp)
-                        player.coins -= 1000
+                    if player.coins >= 1000 * floor:
+                        player.hp = min(player.hp + 10000 * floor, player.max_hp)
+                        player.coins -= 1000 * floor
                 elif event.key == pygame.K_5:
-                    if player.coins >= 1000:
-                        player.base_atk += 50
-                        player.coins -= 1000
+                    if player.coins >= 1000 * floor:
+                        player.base_atk += 50 * floor
+                        player.coins -= 1000 * floor
                 elif event.key == pygame.K_6:
-                    if player.coins >= 1000:
-                        player.base_defense += 50
-                        player.coins -= 1000
+                    if player.coins >= 1000 * floor:
+                        player.base_defense += 50 * floor
+                        player.coins -= 1000 * floor
 
 
 # -------- 迷宫生成函数 --------
@@ -2942,11 +2942,11 @@ class Game:
             self.player.coins += coins
             self.add_message(f"Chest, gain {coins} coin")
         elif item.item_type == "HP_SMALL":
-            self.player.hp = min(self.player.hp + 100, self.player.max_hp)
-            self.add_message("Small HP portion, HP +100")
+            self.player.hp = min(self.player.hp + 100 * self.floor, self.player.max_hp)
+            self.add_message(f"Small HP portion, HP +{100 * self.floor}")
         elif item.item_type == "HP_LARGE":
-            self.player.hp = min(self.player.hp + 500, self.player.max_hp)
-            self.add_message("Large HP portion, HP +500")
+            self.player.hp = min(self.player.hp + 500 * self.floor, self.player.max_hp)
+            self.add_message(f"Large HP portion, HP +{500 * self.floor}")
         elif item.item_type == "ATK_GEM":
             atk = random.randint(1, 4) * self.floor
             self.player.base_atk += atk
@@ -4426,7 +4426,7 @@ class Game:
                     self.add_message("麻痹中无法移动")
                     continue
                 elif event.key == pygame.K_b:
-                    shop_screen(self.screen, self.player)
+                    shop_screen(self.screen, self.player, self.floor)
                 elif event.key == pygame.K_w:
                     self.player.move(0, -1, self)
                 elif event.key == pygame.K_s:
