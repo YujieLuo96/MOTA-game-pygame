@@ -97,28 +97,51 @@ MONSTER_WEIGHT = [10, 10, 5, 5, 5, 12, 16, 12, 8, 6, 5, 5, 8, 2, 1, 1, 1, 1, 1, 
 
 # 怪物列表，每个怪物的属性
 monsters_data = [
-    {"name": "蝙蝠", "HP": 50, "ATK": 20, "DEF": 5, "size": (1, 1), "coin": 20, "speed": 5, "level": 1},
-    {"name": "白色蝙蝠", "HP": 55, "ATK": 22, "DEF": 6, "size": (1, 1), "coin": 22, "speed": 4, "level": 1},
-    {"name": "腐蚀怪", "HP": 200, "ATK": 40, "DEF": 15, "size": (1, 1), "coin": 50, "speed": 15, "level": 2},
-    {"name": "火焰骑士", "HP": 250, "ATK": 35, "DEF": 30, "size": (1, 1), "coin": 50, "speed": 18, "level": 3},
-    {"name": "纯火焰骑士", "HP": 300, "ATK": 40, "DEF": 35, "size": (1, 1), "coin": 55, "speed": 15, "level": 4},
-    {"name": "骷髅", "HP": 100, "ATK": 30, "DEF": 10, "size": (1, 2), "coin": 35, "speed": 25, "level": 1},
-    {"name": "史莱姆", "HP": 80, "ATK": 25, "DEF": 8, "size": (1, 1), "coin": 25, "speed": 20, "level": 1},
-    {"name": "红史莱姆", "HP": 160, "ATK": 35, "DEF": 12, "size": (1, 1), "coin": 45, "speed": 25, "level": 2},
-    {"name": "黑史莱姆", "HP": 240, "ATK": 45, "DEF": 16, "size": (1, 1), "coin": 60, "speed": 30, "level": 3},
-    {"name": "闪光史莱姆", "HP": 280, "ATK": 55, "DEF": 30, "size": (1, 1), "coin": 90, "speed": 20, "level": 4},
-    {"name": "电击球", "HP": 200, "ATK": 40, "DEF": 15, "size": (1, 1), "coin": 50, "speed": 4, "level": 2},
-    {"name": "异色电击球", "HP": 220, "ATK": 44, "DEF": 18, "size": (1, 1), "coin": 55, "speed": 4, "level": 2},
-    {"name": "魔法师", "HP": 120, "ATK": 35, "DEF": 12, "size": (1, 2), "coin": 60, "speed": 35, "level": 3},
-    {"name": "魔王", "HP": 1000, "ATK": 50, "DEF": 20, "size": (2, 2), "coin": 300, "speed": 50, "level": 5},
-    {"name": "圣洁魔王", "HP": 1100, "ATK": 55, "DEF": 22, "size": (2, 2), "coin": 330, "speed": 45, "level": 6},
-    {"name": "普通巨龙", "HP": 5000, "ATK": 110, "DEF": 50, "size": (3, 3), "coin": 1200, "speed": 60, "level": 7},
-    {"name": "冰霜巨龙", "HP": 5500, "ATK": 130, "DEF": 55, "size": (3, 3), "coin": 1300, "speed": 60, "level": 8},
-    {"name": "血腥闪电", "HP": 6000, "ATK": 200, "DEF": 110, "size": (3, 3), "coin": 1500, "speed": 30, "level": 7},
-    {"name": "纯青闪电", "HP": 7000, "ATK": 300, "DEF": 130, "size": (3, 3), "coin": 2000, "speed": 30, "level": 8},
-    {"name": "金色闪电", "HP": 8000, "ATK": 400, "DEF": 150, "size": (3, 3), "coin": 2500, "speed": 30, "level": 9},
-    {"name": "火焰领主", "HP": 6500, "ATK": 130, "DEF": 60, "size": (3, 3), "coin": 1500, "speed": 60, "level": 7},
-    {"name": "纯火焰领主", "HP": 7500, "ATK": 180, "DEF": 80, "size": (3, 3), "coin": 1900, "speed": 50, "level": 8}
+    # 基础怪物
+    {"name": "蝙蝠", "HP": 50, "ATK": 20, "DEF": 5, "size": (1, 1),
+     "attack_range": 1, "attack_speed": 1.0, "coin": 20, "speed": 5, "level": 1},
+    {"name": "白色蝙蝠", "HP": 55, "ATK": 22, "DEF": 6, "size": (1, 1),
+     "attack_range": 1, "attack_speed": 1.2, "coin": 22, "speed": 4, "level": 1},
+    {"name": "腐蚀怪", "HP": 200, "ATK": 40, "DEF": 15, "size": (1, 1),
+     "attack_range": 1, "attack_speed": 0.8, "coin": 50, "speed": 15, "level": 2},
+    {"name": "火焰骑士", "HP": 250, "ATK": 35, "DEF": 30, "size": (1, 1),
+     "attack_range": 1, "attack_speed": 1.0, "coin": 50, "speed": 18, "level": 3},
+    {"name": "纯火焰骑士", "HP": 300, "ATK": 40, "DEF": 35, "size": (1, 1),
+     "attack_range": 1, "attack_speed": 1.2, "coin": 55, "speed": 15, "level": 4},
+    {"name": "骷髅", "HP": 100, "ATK": 30, "DEF": 10, "size": (1, 2),
+     "attack_range": 1, "attack_speed": 0.8, "coin": 35, "speed": 25, "level": 1},
+    {"name": "史莱姆", "HP": 80, "ATK": 25, "DEF": 8, "size": (1, 1),
+     "attack_range": 1, "attack_speed": 1.0, "coin": 25, "speed": 20, "level": 1},
+    {"name": "红史莱姆", "HP": 160, "ATK": 35, "DEF": 12, "size": (1, 1),
+     "attack_range": 1, "attack_speed": 1.2, "coin": 45, "speed": 25, "level": 2},
+    {"name": "黑史莱姆", "HP": 240, "ATK": 45, "DEF": 16, "size": (1, 1),
+     "attack_range": 1, "attack_speed": 1.5, "coin": 60, "speed": 30, "level": 3},
+    {"name": "闪光史莱姆", "HP": 280, "ATK": 55, "DEF": 30, "size": (1, 1),
+     "attack_range": 1, "attack_speed": 1.8, "coin": 90, "speed": 20, "level": 4},
+    {"name": "电击球", "HP": 200, "ATK": 40, "DEF": 15, "size": (1, 1),
+     "attack_range": 2, "attack_speed": 0.8, "coin": 50, "speed": 4, "level": 2},
+    {"name": "异色电击球", "HP": 220, "ATK": 44, "DEF": 18, "size": (1, 1),
+     "attack_range": 2, "attack_speed": 1.0, "coin": 55, "speed": 4, "level": 2},
+    {"name": "魔法师", "HP": 120, "ATK": 35, "DEF": 12, "size": (1, 2),
+     "attack_range": 3, "attack_speed": 0.6, "coin": 60, "speed": 35, "level": 3},
+    {"name": "魔王", "HP": 1000, "ATK": 50, "DEF": 20, "size": (2, 2),
+     "attack_range": 2, "attack_speed": 0.5, "coin": 300, "speed": 50, "level": 5},
+    {"name": "圣洁魔王", "HP": 1100, "ATK": 55, "DEF": 22, "size": (2, 2),
+     "attack_range": 2, "attack_speed": 0.6, "coin": 330, "speed": 45, "level": 6},
+    {"name": "普通巨龙", "HP": 5000, "ATK": 110, "DEF": 50, "size": (3, 3),
+     "attack_range": 2, "attack_speed": 0.4, "coin": 1200, "speed": 60, "level": 7},
+    {"name": "冰霜巨龙", "HP": 5500, "ATK": 130, "DEF": 55, "size": (3, 3),
+     "attack_range": 3, "attack_speed": 0.5, "coin": 1300, "speed": 60, "level": 8},
+    {"name": "血腥闪电", "HP": 6000, "ATK": 200, "DEF": 110, "size": (3, 3),
+     "attack_range": 4, "attack_speed": 0.3, "coin": 1500, "speed": 30, "level": 7},
+    {"name": "纯青闪电", "HP": 7000, "ATK": 300, "DEF": 130, "size": (3, 3),
+     "attack_range": 4, "attack_speed": 0.4, "coin": 2000, "speed": 30, "level": 8},
+    {"name": "金色闪电", "HP": 8000, "ATK": 400, "DEF": 150, "size": (3, 3),
+     "attack_range": 4, "attack_speed": 0.5, "coin": 2500, "speed": 30, "level": 9},
+    {"name": "火焰领主", "HP": 6500, "ATK": 130, "DEF": 60, "size": (3, 3),
+     "attack_range": 3, "attack_speed": 0.6, "coin": 1500, "speed": 60, "level": 7},
+    {"name": "纯火焰领主", "HP": 7500, "ATK": 180, "DEF": 80, "size": (3, 3),
+     "attack_range": 3, "attack_speed": 0.7, "coin": 1900, "speed": 50, "level": 8}
 ]
 
 # 道具类型
@@ -126,23 +149,164 @@ ITEM_TYPES = ["CHEST", "HP_SMALL", "HP_LARGE", "ATK_GEM", "DEF_GEM"]
 
 EQUIPMENT_TYPES = {
     # 武器列表
-    "WOOD_SWORD": {"name": "木剑", "type": "weapon", "atk": 5, "multiple": 1, "durability": 20},
-    "BRONZE_DAGGER": {"name": "青铜匕首", "type": "weapon", "atk": 8, "multiple": 1.1, "durability": 30},
-    "STEEL_DAGGER": {"name": "钢匕首", "type": "weapon", "atk": 12, "multiple": 1.2, "durability": 40},
-    "COPPER_SWORD": {"name": "铜剑", "type": "weapon", "atk": 15, "multiple": 1.1, "durability": 50},
-    "IRON_SWORD": {"name": "铁剑", "type": "weapon", "atk": 20, "multiple": 1.2, "durability": 60},
-    "FINE_STEEL_DAGGER": {"name": "精钢匕首", "type": "weapon", "atk": 25, "multiple": 1.3, "durability": 70},
-    "FINE_IRON_SWORD": {"name": "精铁长剑", "type": "weapon", "atk": 30, "multiple": 1.3, "durability": 80},
-    "GUTS_GREATSWORD": {"name": "格斯大剑", "type": "weapon", "atk": 50, "multiple": 1.5, "durability": 100},
+    "WOOD_SWORD": {
+        "tag": "WOOD_SWORD",
+        "name": "木剑",
+        "type": "weapon",
+        "atk": 5,
+        "multiple": 1,
+        "attack_speed": 1.2,  # 攻击速度（次/秒）
+        "attack_range": 1,     # 攻击范围（格）
+        "durability": 20       # 耐久度
+    },
+    "BRONZE_DAGGER": {
+        "tag": "BRONZE_DAGGER",
+        "name": "青铜匕首",
+        "type": "weapon",
+        "atk": 8,
+        "multiple": 1.1,
+        "attack_speed": 1.5,  # 快速攻击
+        "attack_range": 1,    # 近战
+        "durability": 30
+    },
+    "STEEL_DAGGER": {
+        "tag": "STEEL_DAGGER",
+        "name": "钢匕首",
+        "type": "weapon",
+        "atk": 12,
+        "multiple": 1.2,
+        "attack_speed": 1.8,  # 更快攻击
+        "attack_range": 1,    # 近战
+        "durability": 40
+    },
+    "COPPER_SWORD": {
+        "tag": "COPPER_SWORD",
+        "name": "铜剑",
+        "type": "weapon",
+        "atk": 15,
+        "multiple": 1.1,
+        "attack_speed": 1.0,  # 标准攻击速度
+        "attack_range": 1,    # 近战
+        "durability": 50
+    },
+    "IRON_SWORD": {
+        "tag": "IRON_SWORD",
+        "name": "铁剑",
+        "type": "weapon",
+        "atk": 20,
+        "multiple": 1.2,
+        "attack_speed": 1.0,  # 标准攻击速度
+        "attack_range": 1,    # 近战
+        "durability": 60
+    },
+    "FINE_STEEL_DAGGER": {
+        "tag": "FINE_STEEL_DAGGER",
+        "name": "精钢匕首",
+        "type": "weapon",
+        "atk": 25,
+        "multiple": 1.3,
+        "attack_speed": 2.0,  # 极快攻击
+        "attack_range": 1,    # 近战
+        "durability": 70
+    },
+    "FINE_IRON_SWORD": {
+        "tag": "FINE_IRON_SWORD",
+        "name": "精铁长剑",
+        "type": "weapon",
+        "atk": 30,
+        "multiple": 1.3,
+        "attack_speed": 0.9,  # 稍慢但威力大
+        "attack_range": 1,    # 近战
+        "durability": 80
+    },
+    "GUTS_GREATSWORD": {
+        "tag": "GUTS_GREATSWORD",
+        "name": "格斯大剑",
+        "type": "weapon",
+        "atk": 50,
+        "multiple": 1.5,
+        "attack_speed": 0.6,  # 慢速重击
+        "attack_range": 1,    # 近战
+        "durability": 100
+    },
+    "LONG_SPEAR": {
+        "tag": "LONG_SPEAR",
+        "name": "长矛",
+        "type": "weapon",
+        "atk": 18,
+        "multiple": 1.2,
+        "attack_speed": 0.8,  # 较慢
+        "attack_range": 2,    # 远程攻击
+        "durability": 50
+    },
+    "CROSSBOW": {
+        "tag": "CROSSBOW",
+        "name": "弩",
+        "type": "weapon",
+        "atk": 22,
+        "multiple": 1.3,
+        "attack_speed": 0.5,  # 慢速
+        "attack_range": 3,    # 远程攻击
+        "durability": 40
+    },
 
-    # 护甲列表
-    "WOOD_ARMOR": {"name": "木甲", "type": "armor", "def": 5, "multiple": 1, "durability": 30},
-    "COPPER_ARMOR": {"name": "铜甲", "type": "armor", "def": 10, "multiple": 1.1, "durability": 50},
-    "IRON_ARMOR": {"name": "铁甲", "type": "armor", "def": 15, "multiple": 1.2, "durability": 70},
-    "STEEL_ARMOR": {"name": "钢甲", "type": "armor", "def": 20, "multiple": 1.3, "durability": 90},
-    "LIGHTNING_ARMOR_RED": {"name": "红闪电甲", "type": "armor", "def": 30, "multiple": 1.4, "durability": 110},
-    "LIGHTNING_ARMOR_BLUE": {"name": "蓝闪电甲", "type": "armor", "def": 30, "multiple": 1.4, "durability": 110},
-    "LIGHTNING_ARMOR_YELLOW": {"name": "黄闪电甲", "type": "armor", "def": 30, "multiple": 1.4, "durability": 110}
+    # 护甲列表（保持不变）
+    "WOOD_ARMOR": {
+        "tag": "WOOD_ARMOR",
+        "name": "木甲",
+        "type": "armor",
+        "def": 5,
+        "multiple": 1,
+        "durability": 30
+    },
+    "COPPER_ARMOR": {
+        "tag": "COPPER_ARMOR",
+        "name": "铜甲",
+        "type": "armor",
+        "def": 10,
+        "multiple": 1.1,
+        "durability": 50
+    },
+    "IRON_ARMOR": {
+        "tag": "IRON_ARMOR",
+        "name": "铁甲",
+        "type": "armor",
+        "def": 15,
+        "multiple": 1.2,
+        "durability": 70
+    },
+    "STEEL_ARMOR": {
+        "tag": "STEEL_ARMOR",
+        "name": "钢甲",
+        "type": "armor",
+        "def": 20,
+        "multiple": 1.3,
+        "durability": 90
+    },
+    "LIGHTNING_ARMOR_RED": {
+        "tag": "LIGHTNING_ARMOR_RED",
+        "name": "红闪电甲",
+        "type": "armor",
+        "def": 30,
+        "multiple": 1.4,
+        "durability": 110
+    },
+    "LIGHTNING_ARMOR_BLUE": {
+        "tag": "LIGHTNING_ARMOR_BLUE",
+        "name": "蓝闪电甲",
+        "type": "armor",
+        "def": 30,
+        "multiple": 1.4,
+        "durability": 110
+    },
+    "LIGHTNING_ARMOR_YELLOW": {
+        "tag": "LIGHTNING_ARMOR_YELLOW",
+        "name": "黄闪电甲",
+        "type": "armor",
+        "def": 30,
+        "multiple": 1.4,
+        "durability": 110
+    }
 }
 
 
@@ -321,6 +485,7 @@ class DungeonButton:
         text_rect = text_surf.get_rect(center=self.rect.center)
         surface.blit(text_surf, text_rect)
 
+
 class MainMenu:
     def __init__(self, screen):
         self.screen = screen
@@ -340,7 +505,6 @@ class MainMenu:
             pygame.Rect(0, 0, 280, 70), "Settings", 32
         )
         self.settings_button.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT * 3 // 4)
-
 
     # --------绘制火炬 -------
     def create_torch_frames(self):
@@ -580,13 +744,28 @@ class Player:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.hp = 1000
+        self.hp = 100000
         self.max_hp = 100000
-        self.base_atk = 25  # 基础攻击力
-        self.base_defense = 25  # 基础防御力
+        self.base_atk = 25000  # 基础攻击力
+        self.base_defense = 25000  # 基础防御力
+        self.base_attack_speed = 10.0  # 基础攻击速度
+        self.base_attack_range = 10    # 基础攻击范围
+        self.attack_cooldown = 0
         self.coins = 0
         self.equipped_weapon = None  # 当前装备的武器
         self.equipped_armor = None  # 当前装备的护甲
+
+    @property
+    def attack_speed(self):
+        if self.equipped_weapon:
+            return self.base_attack_speed * self.equipped_weapon.get("attack_speed", 1.0)
+        return self.base_attack_speed
+
+    @property
+    def attack_range(self):
+        if self.equipped_weapon:
+            return self.equipped_weapon.get("attack_range", 1)
+        return self.base_attack_range
 
     @property
     def atk(self):
@@ -616,6 +795,9 @@ class Monster:
         self.hp = self.Num_Random_Control(floor, mdata["HP"])  # 根据楼层增强怪物
         self.atk = self.Num_Random_Control(floor, mdata["ATK"])
         self.defense = self.Num_Random_Control(floor, mdata["DEF"])
+        self.attack_range = mdata["attack_range"]  # 攻击范围
+        self.attack_speed = mdata["attack_speed"]  # 攻击速度
+        self.attack_cooldown = 0
         self.size = mdata["size"]  # 怪物尺寸
         self.coin = self.Num_Random_Control(floor, mdata["coin"])
         self.speed = mdata["speed"]  # 初始化移动速度
@@ -650,9 +832,138 @@ class Monster:
             x * (1 + 0.2 * random.randint(0, floor)) * (0.6 + 0.4 * floor) * (1 + S_MONSTER * random.random()))
 
 
+# -------------- 攻击类特效 -------------------
+
+# 新增攻击特效类
+class WeaponSwingEffect:
+    def __init__(self, x, y, duration=0.2):
+        self.x = x
+        self.y = y
+        self.progress = 0
+        self.duration = duration
+
+    def update(self, dt):
+        self.progress += dt / self.duration
+        return self.progress < 1.0
+
+    def draw(self, screen):
+        alpha = int(255 * (1 - self.progress))
+        angle = 30 + 120 * self.progress
+        center = (self.x * TILE_SIZE + TILE_SIZE // 2,
+                  self.y * TILE_SIZE + TILE_SIZE // 2)
+        length = TILE_SIZE * 1.2
+
+        # 绘制弧线
+        start_angle = math.radians(angle)
+        end_angle = start_angle + math.radians(90)
+        pygame.draw.arc(screen, (255, 255, 0, alpha),
+                        (center[0] - length // 2, center[1] - length // 2, length, length),
+                        start_angle, end_angle, 3)
+
+
+class ProjectileEffect:
+    def __init__(self, start, end, speed, damage):
+        self.start = (start[0] * TILE_SIZE + TILE_SIZE // 2,
+                      start[1] * TILE_SIZE + TILE_SIZE // 2)
+        self.end = (end[0] * TILE_SIZE + TILE_SIZE // 2,
+                    end[1] * TILE_SIZE + TILE_SIZE // 2)
+        self.speed = speed
+        self.damage = damage
+        self.direction = (self.end[0] - self.start[0],
+                          self.end[1] - self.start[1])
+        distance = math.hypot(*self.direction)
+        if distance == 0:
+            self.direction = (0, 0)
+        else:
+            self.direction = (self.direction[0] / distance,
+                              self.direction[1] / distance)
+        self.pos = list(self.start)
+
+    def update(self, dt):
+        self.pos[0] += self.direction[0] * self.speed * dt
+        self.pos[1] += self.direction[1] * self.speed * dt
+        # 碰撞检测
+        if math.hypot(self.pos[0] - self.end[0], self.pos[1] - self.end[1]) < 5:
+            return False
+        return True
+
+    def draw(self, screen):
+        pygame.draw.circle(screen, (255, 0, 0),
+                           (int(self.pos[0]), int(self.pos[1])), 3)
+
+
+class ClawEffect:
+    def __init__(self, x, y, direction, duration=0.3):
+        """
+        爪击特效
+        :param x: 怪物X坐标
+        :param y: 怪物Y坐标
+        :param direction: 攻击方向元组 (dx, dy)
+        :param duration: 动画持续时间（秒）
+        """
+        self.x = x
+        self.y = y
+        self.direction = direction
+        self.duration = duration
+        self.progress = 0  # 动画进度 0~1
+        self.claw_colors = [
+            (255, 0, 0, 200),  # 红色爪痕
+            (200, 100, 0, 150),  # 橙色拖影
+            (150, 50, 0, 100)  # 深红残影
+        ]
+
+    def update(self, dt):
+        """更新动画进度"""
+        self.progress += dt / self.duration
+        return self.progress < 1.0  # 返回是否还需更新
+
+    def draw(self, screen):
+        """绘制爪击特效"""
+        center_x = self.x * TILE_SIZE + TILE_SIZE // 2
+        center_y = self.y * TILE_SIZE + TILE_SIZE // 2
+
+        # 根据方向计算偏移
+        dx, dy = self.direction
+        angle = math.atan2(dy, dx)  # 攻击方向的角度
+
+        # 动态参数
+        max_length = TILE_SIZE * 1.5 * self.progress
+        alpha = int(255 * (1 - self.progress))
+        spread = math.sin(self.progress * math.pi) * 30  # 爪痕展开角度
+
+        # 绘制三层爪痕（从内到外）
+        for i, color in enumerate(self.claw_colors):
+            # 计算当前层的参数
+            length = max_length - i * 10
+            current_alpha = max(0, color[3] - i * 50)
+
+            # 计算三个爪尖的位置
+            points = []
+            for j in range(3):
+                angle_offset = math.radians(-spread + j * spread)
+                claw_angle = angle + angle_offset
+                x = center_x + math.cos(claw_angle) * length
+                y = center_y + math.sin(claw_angle) * length
+                points.append((x, y))
+
+            # 绘制渐变爪痕
+            for j in range(len(points) - 1):
+                start = points[j]
+                end = points[j + 1]
+                pygame.draw.line(screen, (*color[:3], current_alpha),
+                                 start, end, 3 - i)
+
+            # 添加随机血滴
+            if random.random() < 0.3:
+                blood_pos = random.choice(points)
+                pygame.draw.circle(screen, (139, 0, 0, alpha),
+                                   (int(blood_pos[0]), int(blood_pos[1])),
+                                   random.randint(2, 3))
+
 # --------------- 技能类 ----------------
 
 # 纯青烈焰重击
+
 
 class BlueFireStrikeEffect:
     def __init__(self, x, y, radius):
@@ -765,6 +1076,7 @@ class FireStrikeEffect:
                                  int(3*p['life']))
 
 # 电击球闪电击
+
 
 class ElectricEffect:
     def __init__(self, px, py):
@@ -956,6 +1268,8 @@ class CorrosionEffect:
                                    (int(p['pos'][0]), int(p['pos'][1])), p['size'])
 
  # ----------------------- 物品装备实体 --------------------------
+
+
 class Item:
     def __init__(self, x, y, item_type, equipment_data=None):
         self.x = x
@@ -1473,9 +1787,8 @@ class Game:
                 'color': spark_color  # 火花颜色
             })
 
-
-
     # -------------------- 蝙蝠绘制 ---------------------
+
     def draw_bat(self, monster):
         body_color = (54, 54, 54)  # 身体颜色 深灰色
         wing_color = (40, 40, 40)  # 翅膀颜色 更深的灰色
@@ -2298,7 +2611,6 @@ class Game:
                     self.draw_lightning((int(px), int(py)), (int(px), int(py)), 9 - j,
                                         (255, 100 + j * 50, 0))
 
-
         # 动态粒子
         if random.random() < 0.3:
             self.fear_particles.append({
@@ -2581,7 +2893,6 @@ class Game:
                                 occupied.add((center[0] + dx, center[1] + dy))  # 记录boss占位
                         break
 
-
         # 生成其他怪物
         eligible_monsters = []
         eligible_weights = []
@@ -2653,9 +2964,7 @@ class Game:
                 else:
                     self.draw_floor(x, y, self.background_surface)
 
-
-        # ---------------------- 喷泉房 ----------------------
-
+    # ---------------------- 喷泉房 ----------------------
 
     def draw_fountain_room(self):
         for y in range(MAP_HEIGHT):
@@ -2668,7 +2977,6 @@ class Game:
                     self.draw_obsidian_statue(x, y)
                 elif self.maze[y][x] == 5:  # 地狱地板
                     self.draw_hell_floor(x, y)
-
 
     def create_fountain_room(self, room):
         x, y, w, h = room
@@ -2842,7 +3150,6 @@ class Game:
             ]
             pygame.draw.polygon(self.screen, (255, 140, 0), flame_points)
 
-
         # ----------------------迷宫墙壁绘画 ----------------------
 
     def generate_wall_style(self, x, y):
@@ -2921,15 +3228,16 @@ class Game:
 
     def handle_item_pickup(self, item):
         if item.item_type in EQUIPMENT_TYPES:
+            equipped_data = EQUIPMENT_TYPES[item.item_type].copy()
             eq_type = EQUIPMENT_TYPES[item.item_type]["type"]
             old_equip = None
 
             if eq_type == "weapon":
                 old_equip = self.player.equipped_weapon
-                self.player.equipped_weapon = EQUIPMENT_TYPES[item.item_type]
+                self.player.equipped_weapon = equipped_data
             elif eq_type == "armor":
                 old_equip = self.player.equipped_armor
-                self.player.equipped_armor = EQUIPMENT_TYPES[item.item_type]
+                self.player.equipped_armor = equipped_data
 
             if old_equip:
                 self.add_message(f"装备了 {item.equipment_data['name']} 替换了 {old_equip['name']}")
@@ -2956,39 +3264,141 @@ class Game:
             self.player.base_defense += defend
             self.add_message(f"DEF gem, DEF +{defend}")
 
-    def handle_combat(self, monster):
-        # Check if the player is in any of the blocks occupied by the monster
-        player_pos = (self.player.x, self.player.y)
-        monster_blocks = [(monster.x + dx, monster.y + dy) for dx in range(monster.size[0]) for dy in
-                          range(monster.size[1])]
+    def check_player_attack(self):
+        # 获取攻击范围内的所有怪物
+        targets = []
+        for monster in self.monsters:
+            distance = self.calculate_distance(
+                (self.player.x, self.player.y),
+                (monster.x, monster.y)
+            )
+            if distance <= self.player.attack_range:
+                targets.append(monster)
 
-        actual_atk = self.player.atk * (0.6 if self.gold_fear or self.blue_fear or self.red_fear else 1)
-        actual_def = self.player.defense * (0.6 if self.gold_fear or self.blue_fear or self.red_fear else 1)
+        if targets:
+            # 攻击所有在范围内的目标
+            for target in targets:
+                self.perform_attack(attacker=self.player, defender=target)
+            self.player.attack_cooldown = 1.0 / self.player.attack_speed
+            # 触发攻击动画
+            self.show_attack_animation(self.player)
 
-        if player_pos in monster_blocks:
-            damage = random.uniform(0.5, 1.5) * max(actual_atk - monster.defense, 0)
-            monster.hp -= damage
-            self.add_message(f"攻击 {monster.name}, 造成 {damage} 伤害")
-            if monster.hp <= 0:
-                coin_gain = random.randint(math.ceil(0.4 * monster.coin), 2 * monster.coin)
-                self.player.coins += coin_gain
-                self.add_message(f"攻击 {monster.name}, 获得 {coin_gain} 金币")
+    def check_monster_attack(self, monster):
+        # 计算与玩家的距离
+        distance = self.calculate_distance(
+            (monster.x, monster.y),
+            (self.player.x, self.player.y)
+        )
+
+        if distance <= monster.attack_range:
+            self.perform_attack(attacker=monster, defender=self.player)
+            monster.attack_cooldown = 1.0 / monster.attack_speed
+            # 触发攻击动画
+            self.show_attack_animation(monster)
+        if monster.hp <= 0:
+            self.monsters.remove(monster)
+    def calculate_distance(self, pos1, pos2):
+        # 使用曼哈顿距离
+        return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+
+    def perform_attack(self, attacker, defender):
+        # 计算实际攻击属性
+        if isinstance(attacker, Player):
+            atk = attacker.atk * (0.6 if self.gold_fear or self.blue_fear or self.red_fear else 1)
+            defense_type = 'defense'
+        else:
+            atk = attacker.atk
+            defense_type = 'defense'  # 可根据需要区分物理/魔法防御
+
+        # 计算伤害
+        damage = max(0, atk - getattr(defender, defense_type, 0) * random.uniform(0.4, 1.6))
+        damage = int(damage * random.uniform(0.6, 1.4))  # 加入随机浮动
+
+        # 应用伤害
+        defender.hp = max(0, defender.hp - damage)
+
+        # 处理装备耐久
+        if isinstance(attacker, Player):
+            # 减少武器耐久
+            if attacker.equipped_weapon:
+                attacker.equipped_weapon["durability"] -= 1
+                if attacker.equipped_weapon["durability"] <= 0:
+                    self.add_message(f"{attacker.equipped_weapon['name']} 已损坏！")
+                    attacker.equipped_weapon = None
+        elif isinstance(defender, Player):
+            # 减少护甲耐久
+            if defender.equipped_armor:
+                defender.equipped_armor["durability"] -= 1
+                if defender.equipped_armor["durability"] <= 0:
+                    self.add_message(f"{defender.equipped_armor['name']} 已损坏！")
+                    defender.equipped_armor = None
+
+        # 显示战斗信息
+        if isinstance(attacker, Player):
+            self.add_message(f"你对{defender.name}造成{damage}点伤害！")
+            if defender.hp <= 0:
+                self.add_message(f"击败{defender.name}，获得{defender.coin}金币")
+                self.player.coins += defender.coin
+        else:
+            self.add_message(f"{attacker.name}对你造成{damage}点伤害！")
+            if self.player.hp <= 0:
+                self.game_state = "dead"
+                self.death_screen = DeathScreen(self.screen, self.player, self.floor)
+
+    def show_attack_animation(self, attacker):
+        # 根据攻击者类型显示不同动画
+        if isinstance(attacker, Player):
+            # 玩家攻击动画
+            self.skill_effects.append(WeaponSwingEffect(
+                attacker.x, attacker.y,
+                duration=0.2
+            ))
+        else:
+            # 怪物攻击动画
+            if "远程" in attacker.name:
+                self.skill_effects.append(ProjectileEffect(
+                    start=(attacker.x, attacker.y),
+                    end=(self.player.x, self.player.y),
+                    speed=500,
+                    damage=attacker.atk
+                ))
             else:
-                damage2 = random.uniform(0.5, 1.5) * max(monster.atk - actual_def, 0)
-                self.player.hp -= damage2
-                self.add_message(f"{monster.name} 造成 {damage2} 伤害")
-                if self.player.hp <= 0:
-                    self.add_message("Wasted, Game Over!")
-                    self.game_state = "dead"
-                    self.death_screen = DeathScreen(self.screen, self.player, self.floor)
+                self.skill_effects.append(ClawEffect(
+                    attacker.x, attacker.y,
+                    direction=(self.player.x - attacker.x,
+                               self.player.y - attacker.y)
+                ))
 
     def update(self):
         if self.is_animating:
             return  # 动画期间不更新游戏逻辑
-
         dt = self.clock.get_time() / 1000  # 获取每帧时间（秒）
 
+        # 更新攻击冷却
+        self.player.attack_cooldown = max(0, self.player.attack_cooldown - dt)
+        for monster in self.monsters:
+            monster.attack_cooldown = max(0, monster.attack_cooldown - dt)
+
+        # ------------------------- 玩家攻击逻辑 -------------------------
+        if self.player.attack_cooldown <= 0:
+            self.check_player_attack()
+
+        # ------------------------- 怪物攻击逻辑 -------------------------
+        for monster in self.monsters:
+            if monster.attack_cooldown <= 0:
+                self.check_monster_attack(monster)
+
+        # ------------------------- 路径特效更新 -------------------------
         self.set_path_effect()
+
+        # ------------------------- 攻击特效更新 -------------------------
+        for effect in self.skill_effects[:]:
+            if isinstance(effect, (WeaponSwingEffect,
+                                   ProjectileEffect, ClawEffect)):
+                if not effect.update(dt):
+                    self.skill_effects.remove(effect)
+
+        # ------------------------- 技能特效更新 -------------------------
 
         self.red_fear = False  # 血腥恐惧debuff
         self.blue_fear = False  # 血腥恐惧debuff
@@ -3016,7 +3426,8 @@ class Game:
                 if not effect.update(dt):
                     self.skill_effects.remove(effect)
 
-        # 在怪物移动逻辑后添加腐蚀痕迹生成
+        # ------------------------- 腐蚀效果更新 -------------------------
+        # 在怪物移动添加腐蚀痕迹生成
         for monster in self.monsters[:]:
             if "腐蚀怪" in monster.name:
                 # 添加新痕迹（限制最多100个注意不同实体不同）
@@ -3034,26 +3445,28 @@ class Game:
             effect.x == self.player.x and effect.y == self.player.y
             for effect in self.corrosion_effects
         )
-        # 腐蚀区域扣血（每秒50点）
+        # 腐蚀区域扣血（每秒50 * FLOOR 点）
         if self.player_debuff['in_corrosion'] and current_time % 1000 < 50:
-            self.player.hp -= 50
-            self.add_message("腐蚀区域造成50点伤害！")
+            self.player.hp -= 50 * self.floor
+            self.add_message(f"腐蚀区域造成 {50 * self.floor} 点伤害！")
 
+        # ------------------------- 怪物技能逻辑 -------------------------
         for monster in self.monsters:
-            # 匹配所有闪电BOSS
-            if "闪电" in monster.name:  # 匹配所有闪电BOSS
+            # 闪电BOSS技能
+            if "闪电" in monster.name:
                 distance = max(abs(self.player.x - monster.x), abs(self.player.y - monster.y))
                 if distance <= 6:
                     if "纯青" in monster.name:
-                        self.blue_fear = True  # 新增蓝色恐惧状态
+                        self.blue_fear = True
                     elif "金色" in monster.name:
-                        self.gold_fear = True  # 新增金色恐惧状态
+                        self.gold_fear = True
                     elif "血腥" in monster.name:
-                        self.red_fear = True  # 默认血腥闪电
+                        self.red_fear = True
                     # 持续伤害
                     if pygame.time.get_ticks() % 1000 < 30:
                         self.player.hp -= 80
                 continue
+
             # 闪电球技能
             elif "电击球" in monster.name:
                 monster.skill_cd -= dt
@@ -3069,6 +3482,7 @@ class Game:
                     # 添加电击特效
                     self.skill_effects.append(ElectricEffect(self.player.x, self.player.y))
                 continue
+
             # 魔王技能
             elif "魔王" in monster.name:
                 monster.skill_cd -= dt
@@ -3091,6 +3505,7 @@ class Game:
                     # 绘制地裂效果
                     self.skill_effects.append(CrackEffect(self.player.x, self.player.y, 3))
                 continue
+
             # 冰霜巨龙技能
             elif "冰霜巨龙" in monster.name:
                 monster.skill_cd -= dt
@@ -3156,14 +3571,15 @@ class Game:
                     self.player_debuff['poison_end'] = pygame.time.get_ticks() + 3000
                     monster.skill_cd = monster.strike_cd
 
-        # 更新恐惧粒子
+        # ----------------- 更新粒子效果 ---------------------------
         for p in self.fear_particles[:]:
             p['pos'][0] += p['vel'][0]
             p['pos'][1] += p['vel'][1]
             p['life'] -= dt
             if p['life'] <= 0:
                 self.fear_particles.remove(p)
-        # 处理玩家状态
+
+        # ------------------------- 玩家状态检测 -------------------------
         current_time = pygame.time.get_ticks()
         # 寒冰区域检测
         player_pos = (self.player.x, self.player.y)
@@ -3194,6 +3610,7 @@ class Game:
                     self.game_state = "dead"
                     self.death_screen = DeathScreen(self.screen, self.player, self.floor)
 
+        # ------------------------- 其他逻辑 -------------------------
         # 原有楼层切换和物品拾取逻辑
         if (self.player.x, self.player.y) == self.exit_pos:
             self.floor += 1
@@ -3206,16 +3623,6 @@ class Game:
             if (self.player.x, self.player.y) == (item.x, item.y):
                 self.handle_item_pickup(item)
                 self.items.remove(item)
-
-        # 处理玩家主动触发的战斗（原有逻辑）
-        for monster in self.monsters[:]:
-            player_pos = (self.player.x, self.player.y)
-            monster_blocks = [(monster.x + dx, monster.y + dy) for dx in range(monster.size[0]) for dy in
-                              range(monster.size[1])]
-            if player_pos in monster_blocks:
-                self.handle_combat(monster)
-                if monster.hp <= 0:
-                    self.monsters.remove(monster)
 
         # 怪物移动逻辑，玩家在三个以内朝向玩家
         for monster in list(self.monsters):  # 使用副本遍历
@@ -3250,36 +3657,19 @@ class Game:
                 if best_dir:
                     directions.insert(0, best_dir)  # 将最佳方向插入最前面
 
-            # 尝试所有可能的方向
             for dx, dy in directions:
                 new_x = monster.x + dx
                 new_y = monster.y + dy
                 if self.can_monster_move_to(monster, new_x, new_y):
-                    # 保存旧位置用于战斗检测
                     monster.x = new_x
                     monster.y = new_y
-
-                    # 移动后立即检测是否与玩家碰撞
-                    player_pos = (self.player.x, self.player.y)
-                    new_blocks = [(new_x + dxm, new_y + dym)
-                                  for dxm in range(monster.size[0])
-                                  for dym in range(monster.size[1])]
-                    if player_pos in new_blocks:
-                        self.handle_combat(monster)
-                        if monster.hp <= 0:
-                            self.monsters.remove(monster)
-                        # 如果玩家死亡
-                        if self.player.hp <= 0:
-                            self.game_state = "dead"
-                            self.death_screen = DeathScreen(self.screen, self.player, self.floor)
                     break
 
-        self.current_monster = None
+        # 更新附近怪物列表
         self.nearby_monsters = []
         for monster in self.monsters:
-            # 计算怪物与玩家的曼哈顿距离
             distance = abs(monster.x - self.player.x) + abs(monster.y - self.player.y)
-            if distance <= 3:  # 3格以内
+            if distance <= 3:
                 self.nearby_monsters.append(monster)
 
         # 喷泉房间生成史莱姆
@@ -3288,6 +3678,7 @@ class Game:
             if current_time - self.last_spawn_time > FOUNTAIN_SPAWN_INTERVAL:
                 self.spawn_slime()
                 self.last_spawn_time = current_time
+
         # 岩浆房伤害
         if self.lava_room and self.player_in_lava_room():
             if (self.player.x, self.player.y) in self.get_lava_tiles():
@@ -3732,28 +4123,46 @@ class Game:
         # 文字信息
         eq_font = pygame.font.SysFont("SimSun", 16)
         # 武器信息
-        weapon_text = f"武: {self.player.equipped_weapon['name']}" if self.player.equipped_weapon else "武: 无"
-        weapon_color = (200, 200, 200) if self.player.equipped_weapon else (150, 150, 150)
+        weapon = self.player.equipped_weapon
+        weapon_text = f"武: {weapon['name']}" if weapon else "武: 无"
+        weapon_color = (200, 200, 200) if weapon else (150, 150, 150)
         eq_text = eq_font.render(weapon_text, True, weapon_color)
-        equip_bg.blit(eq_text, (50, 15))
+        equip_bg.blit(eq_text, (50, 10))  # 调整垂直位置
 
-        if self.player.equipped_weapon:
-            detail_text = f"ATK+{self.player.equipped_weapon['atk']} "
+        if weapon:
+            # 显示攻击属性
+            detail_text = f"ATK+{weapon['atk']}"
             eq_detail = eq_font.render(detail_text, True, (180, 180, 255))
-            equip_bg.blit(eq_detail, (50, 35))
+            equip_bg.blit(eq_detail, (50, 30))
+
+            # 显示耐久度（红色渐变）
+            durability_text = f"耐久: {weapon['durability']}/{EQUIPMENT_TYPES[weapon['tag']]['durability']}"
+            durability_ratio = weapon['durability'] / EQUIPMENT_TYPES[weapon['tag']]['durability']
+            color = (255, int(255 * durability_ratio), 0)  # 从绿到红渐变
+            durability_surf = eq_font.render(durability_text, True, color)
+            equip_bg.blit(durability_surf, (50, 50))
 
         # 护甲信息
-        armor_text = f"甲: {self.player.equipped_armor['name']}" if self.player.equipped_armor else "甲: 无"
-        armor_color = (200, 200, 200) if self.player.equipped_armor else (150, 150, 150)
+        armor = self.player.equipped_armor
+        armor_text = f"甲: {armor['name']}" if armor else "甲: 无"
+        armor_color = (200, 200, 200) if armor else (150, 150, 150)
         eq_text = eq_font.render(armor_text, True, armor_color)
-        equip_bg.blit(eq_text, (160, 15))
+        equip_bg.blit(eq_text, (160, 10))  # 调整垂直位置
 
-        if self.player.equipped_armor:
-            detail_text = f"DEF+{self.player.equipped_armor['def']} "
+        if armor:
+            # 显示防御属性
+            detail_text = f"DEF+{armor['def']}"
             eq_detail = eq_font.render(detail_text, True, (180, 255, 180))
-            equip_bg.blit(eq_detail, (160, 35))
+            equip_bg.blit(eq_detail, (160, 30))
 
-        panel.blit(equip_bg, (20, 240))  # 调整这个Y坐标确保布局合理
+            # 显示耐久度（蓝色渐变）
+            durability_text = f"耐久: {armor['durability']}/{EQUIPMENT_TYPES[armor['tag']]['durability']}"
+            durability_ratio = armor['durability'] / EQUIPMENT_TYPES[armor['tag']]['durability']
+            color = (int(255 * (1 - durability_ratio)), int(255 * durability_ratio), 255)  # 从蓝到青渐变
+            durability_surf = eq_font.render(durability_text, True, color)
+            equip_bg.blit(durability_surf, (160, 50))
+
+        panel.blit(equip_bg, (20, 240))
 
         # ------ 消息日志区域 ------
         log_bg = pygame.Surface((260, SCREEN_HEIGHT - 340), pygame.SRCALPHA)
