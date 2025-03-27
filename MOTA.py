@@ -746,14 +746,51 @@ class Player:
         self.y = y
         self.hp = 100000
         self.max_hp = 100000
-        self.base_atk = 25000  # 基础攻击力
-        self.base_defense = 25000  # 基础防御力
-        self.base_attack_speed = 10.0  # 基础攻击速度
-        self.base_attack_range = 10    # 基础攻击范围
+        self.base_atk = 25  # 基础攻击力
+        self.base_defense = 25  # 基础防御力
+        self.base_attack_speed = 1.0  # 基础攻击速度
+        self.base_attack_range = 1   # 基础攻击范围
         self.attack_cooldown = 0
         self.coins = 0
         self.equipped_weapon = None  # 当前装备的武器
         self.equipped_armor = None  # 当前装备的护甲
+        self.skills = {
+            'Q': {
+                'name': "火球术",
+                'cooldown': 5,
+                'current_cd': 0,
+                'range': 6,
+                'radius': 2,
+                'damage_multiple': 2.2,
+                'effect': FireStrikeEffect
+            },
+            'E': {
+                'name': "闪电链",
+                'cooldown': 0.1,
+                'current_cd': 0,
+                'range': 8,
+                'max_targets': 3,
+                'damage_multiple': 1.8,
+                'effect': LightningEffect
+            },
+            'R': {
+                'name': "神圣球",
+                'cooldown': 8,
+                'current_cd': 0,
+                'seek_range': 10,
+                'ball_count': 12,
+                'damage_multiple': 2.5,
+                'effect': HollyBallEffect
+            },
+            'T': {
+                'name': "三连斩",
+                'cooldown': 6,
+                'current_cd': 0,
+                'range': 2,
+                'damage_multipliers': [0.8, 1.0, 1.5],  # 三连斩伤害系数
+                'effect': TripleAttack
+            }
+        }
 
     @property
     def attack_speed(self):
@@ -785,6 +822,7 @@ class Player:
         if game.is_walkable(new_x, new_y):
             self.x = new_x
             self.y = new_y
+
 
 
 class Monster:
@@ -960,9 +998,113 @@ class ClawEffect:
                                    (int(blood_pos[0]), int(blood_pos[1])),
                                    random.randint(2, 3))
 
+
 # --------------- 技能类 ----------------
 
-# 纯青烈焰重击
+# --------------- 三连斩 ----------------
+
+class TripleAttack:
+    def __init__(self, player_pos, attack_range=2, damage_multiplier=(0.8, 1.0, 1.5)):
+        self.player_pos = player_pos
+        self.range = attack_range
+        self.damage_multipliers = damage_multiplier
+        self.duration = 0.75  # Total duration of triple attack
+        self.progress = 0.0
+        self.slash_delay = 0.2  # Delay between slashes
+        self.slashes = [
+            {'start_time': 0.0, 'angle': 45, 'color': (220, 180, 20), 'hit': False, 'target': None},  # Gold
+            {'start_time': self.slash_delay, 'angle': 135, 'color': (200, 70, 20), 'hit': False, 'target': None},
+            # Orange-red
+            {'start_time': self.slash_delay * 2, 'angle': 90, 'color': (220, 20, 60), 'hit': False, 'target': None}
+            # Crimson
+        ]
+        self.hit_effects = []
+
+    def update(self, dt, monsters):
+        self.progress += dt / self.duration
+        damage_results = []
+
+        # Check for new hits
+        for i, slash in enumerate(self.slashes):
+            slash_time = slash['start_time'] / self.duration
+            if self.progress >= slash_time and not slash['hit']:
+                eligible_targets = [m for m in monsters if self._calculate_distance(
+                    self.player_pos, (m.x, m.y)) <= self.range and m.hp > 0]
+
+                if eligible_targets:
+                    # Select a random target for this slash
+                    target = random.choice(eligible_targets)
+                    slash['target'] = target
+
+                    # Add visual effect
+                    self.hit_effects.append({
+                        'pos': (target.x * TILE_SIZE + TILE_SIZE // 2,
+                                target.y * TILE_SIZE + TILE_SIZE // 2),
+                        'time': 0.3,
+                        'angle': slash['angle'],
+                        'color': slash['color']
+                    })
+
+                    # Record damage
+                    damage_results.append((target, self.damage_multipliers[i]))
+
+                slash['hit'] = True
+
+        # Update hit effects
+        for effect in self.hit_effects[:]:
+            effect['time'] -= dt
+            if effect['time'] <= 0:
+                self.hit_effects.remove(effect)
+
+        # Check if effect is still active
+        return self.progress < 1.0 or self.hit_effects, damage_results
+
+    def _calculate_distance(self, pos1, pos2):
+        return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+
+    def draw(self, screen):
+        for effect in self.hit_effects:
+            self._draw_slash(screen, effect)
+
+    def _draw_slash(self, screen, effect):
+        pos = effect['pos']
+        angle = math.radians(effect['angle'])
+        color = effect['color']
+
+        # Calculate slash line endpoints
+        length = TILE_SIZE * 1.5
+        start_x = pos[0] - math.cos(angle) * length / 2
+        start_y = pos[1] - math.sin(angle) * length / 2
+        end_x = pos[0] + math.cos(angle) * length / 2
+        end_y = pos[1] + math.sin(angle) * length / 2
+        alpha = int(255 * effect['time'] / 0.3)
+
+        # Draw main slash line
+        pygame.draw.line(
+            screen,
+            (*color, alpha),
+            (int(start_x), int(start_y)),
+            (int(end_x), int(end_y)),
+            4
+        )
+
+        # Add simple hit mark
+        pygame.draw.line(
+            screen,
+            (*color, alpha),
+            (int(pos[0] - 5), int(pos[1] - 5)),
+            (int(pos[0] + 5), int(pos[1] + 5)),
+            3
+        )
+        pygame.draw.line(
+            screen,
+            (*color, alpha),
+            (int(pos[0] - 5), int(pos[1] + 5)),
+            (int(pos[0] + 5), int(pos[1] - 5)),
+            3
+        )
+
+# -------------------- 纯青烈焰重击 --------------
 
 
 class BlueFireStrikeEffect:
@@ -1019,14 +1161,15 @@ class BlueFireStrikeEffect:
                 pygame.draw.circle(screen, color, (int(p['px']), int(p['py'])),
                                  int(3*p['life']))
 
-# 烈焰重击
+# -------------- 烈焰重击 -----------------
+
 
 class FireStrikeEffect:
     def __init__(self, x, y, radius):
         self.x = x
         self.y = y
         self.radius = radius
-        self.lifetime = 2.0
+        self.lifetime = 1.5
         self.flames = []
         # 生成火焰区域
         for dx in range(-radius, radius+1):
@@ -1043,7 +1186,7 @@ class FireStrikeEffect:
             'py': y * TILE_SIZE + random.randint(5, 25),
             'vx': random.uniform(-2, 2),
             'vy': random.uniform(-5, -2),
-            'life': 1.0
+            'life': random.uniform(0.2, 0.6)
         }
 
     def update(self, dt):
@@ -1073,7 +1216,7 @@ class FireStrikeEffect:
                 alpha = int(255 * p['life'])
                 color = (255, 150 + int(105*p['life']), 0, alpha)
                 pygame.draw.circle(screen, color, (int(p['px']), int(p['py'])),
-                                 int(3*p['life']))
+                                 int(5*p['life']))
 
 # 电击球闪电击
 
@@ -1104,7 +1247,519 @@ class ElectricEffect:
             pygame.draw.line(screen, color, p['start'], p['end'], 2)
 
 
-# 魔王重锤眩晕
+# --------------- 闪电链技能特效 ---------------
+class LightningEffect:
+    def __init__(self, start, end, duration=0.5, damage=0):
+        self.start = start  # 起点屏幕坐标
+        self.end = end  # 终点屏幕坐标
+        self.damage = damage
+        self.duration = duration
+        self.progress = 0  # 动画进度 0~1
+        self.particles = []  # 闪电粒子
+        self.main_points = self._generate_lightning_points(start, end, branch_prob=0.3)
+
+    def _generate_lightning_points(self, start, end, branch_prob=0.3):
+        """生成带随机分叉的闪电路径"""
+        points = [start]
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        length = math.hypot(dx, dy)
+        segments = max(6, int(length / 10))
+
+        for i in range(1, segments):
+            t = i / segments
+            base_x = start[0] + dx * t
+            base_y = start[1] + dy * t
+            offset_range = 25 * (1 - t ** 2)
+            offset_x = random.uniform(-offset_range, offset_range)
+            offset_y = random.uniform(-offset_range, offset_range)
+
+            # 添加分叉点
+            if random.random() < branch_prob:
+                points.append((int(base_x + offset_x * 0.5), int(base_y + offset_y * 0.5)))
+
+            points.append((int(base_x + offset_x), int(base_y + offset_y)))
+
+        points.append(end)
+        return points
+
+    def _add_ion_sparks(self, pos, intensity=2.0):
+        """生成炫酷的离子火花"""
+        for _ in range(int(15 * intensity)):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(1, 9) * intensity
+            lifespan = random.uniform(0.1, 0.8)
+
+            spark_color = random.choice([
+                (255, 255, 200),  # 炽白色
+                (255, 150, 255),  # 粉紫色
+                (255, 100, 200),  # 霓虹粉
+                (255, 51, 51)  # 猩红色
+            ])
+
+            self.particles.append({
+                'pos': list(pos),
+                'vel': [math.cos(angle) * speed, math.sin(angle) * speed],
+                'life': lifespan,
+                'max_life': lifespan,
+                'size': random.uniform(0.2, 4),
+                'color': spark_color
+            })
+
+    def update(self, dt):
+        """更新闪电状态"""
+        self.progress += dt / self.duration
+
+        # 更新粒子系统
+        for p in self.particles:
+            p['pos'][0] += p['vel'][0] * dt * 60  # 调整速度系数
+            p['pos'][1] += p['vel'][1] * dt * 60
+            p['life'] -= dt
+        self.particles = [p for p in self.particles if p['life'] > 0]
+
+        return self.progress < 1.0
+
+    def draw(self, screen):
+        """绘制动态闪电效果"""
+        alpha = int(255 * (1 - self.progress))
+
+        # 绘制主闪电路径
+        for i in range(len(self.main_points) - 1):
+            start_pos = self.main_points[i]
+            end_pos = self.main_points[i + 1]
+
+            # 动态颜色系统
+            base_color = random.choice([(255, 255, 0), (255, 165, 0)])
+            color_variation = random.choice([
+                base_color,
+                (min(base_color[0] + 50, 255), min(base_color[1] + 50, 255), min(base_color[2] + 50, 255)),
+                (max(base_color[0] - 50, 0), max(base_color[1] - 50, 0), max(base_color[2] - 50, 0))
+            ])
+            line_color = color_variation + (alpha,)
+
+            # 动态线宽系统
+            thickness = max(1, int(5 * (1 - self.progress)))
+            pygame.draw.line(screen, line_color, start_pos, end_pos,
+                             random.randint(1, thickness))  # 随机线宽增强质感
+
+            # 生成随机分叉
+            if random.random() < 0.4 and i < len(self.main_points) - 2:
+                mid_point = (
+                    (start_pos[0] + end_pos[0]) // 2 + random.randint(-5, 5),
+                    (start_pos[1] + end_pos[1]) // 2 + random.randint(-5, 5)
+                )
+                branch_end = (
+                    mid_point[0] + random.randint(-35, 35),
+                    mid_point[1] + random.randint(-35, 35)
+                )
+                branch_points = self._generate_lightning_points(mid_point, branch_end, 0.5)
+
+                # 绘制分支闪电
+                for j in range(len(branch_points) - 1):
+                    branch_color = (
+                        min(color_variation[0] + 100, 255),
+                        min(color_variation[1] + 100, 255),
+                        min(color_variation[2] + 100, 255),
+                        alpha // 2
+                    )
+                    pygame.draw.line(screen, branch_color,
+                                     branch_points[j], branch_points[j + 1],
+                                     max(1, thickness - 1))
+
+                # 添加火花效果
+                if random.random() < 0.1:
+                    self._add_ion_sparks(mid_point, intensity=0.8)
+
+        # 绘制动态粒子
+        for p in self.particles:
+            if p['life'] > 0:
+                life_ratio = p['life'] / p['max_life']
+                particle_alpha = int(255 * life_ratio * (1 - self.progress))
+
+                # 核心亮光
+                pygame.draw.circle(screen, p['color'] + (particle_alpha,),
+                                   (int(p['pos'][0]), int(p['pos'][1])),
+                                   p['size'] * life_ratio)
+
+# ---------------- 圣光球 -------------------------
+
+
+class HollyBallEffect:
+    def __init__(self, player_pos, ball_count=6, seek_range=10, damage_multiplier=2.5):
+        self.player_pos = player_pos
+        self.ball_count = ball_count
+        self.seek_range = seek_range
+        self.damage_multiplier = damage_multiplier
+        self.duration = 5.0
+        self.progress = 0.0
+
+        # Lightning balls data
+        self.balls = []
+        self.targets = []
+        self.explosions = []
+
+        # Initialize the balls with random positions around the player
+        for i in range(ball_count):
+            angle = math.pi * 2 * i / ball_count
+            offset_x = math.cos(angle) * 3
+            offset_y = math.sin(angle) * 3
+            self.balls.append({
+                'pos': [
+                    player_pos[0] + offset_x,
+                    player_pos[1] + offset_y
+                ],
+                'screen_pos': [
+                    (player_pos[0] + offset_x) * TILE_SIZE + TILE_SIZE // 2,
+                    (player_pos[1] + offset_y) * TILE_SIZE + TILE_SIZE // 2
+                ],
+                'size': random.uniform(0.4, 0.6) * TILE_SIZE,
+                'phase': random.uniform(0, math.pi * 2),
+                'speed': random.uniform(3.0, 6.0),
+                'state': 'seeking',  # States: seeking, attacking, exploded
+                'target': None,
+                'color': self._generate_random_holy_color(),
+                'particles': []
+            })
+
+    def _generate_random_holy_color(self):
+        colors = [
+            (255, 215, 0),  # Gold
+            (240, 240, 200),  # Soft white
+            (135, 206, 250),  # Light sky blue
+            (255, 255, 240),  # Ivory
+            (218, 165, 32)  # Golden rod
+        ]
+        return random.choice(colors)
+
+    def update(self, dt, monsters):
+        self.progress += dt / self.duration
+        damage_results = []
+
+        # Process each ball
+        for ball in self.balls:
+            if ball['state'] == 'exploded':
+                continue
+
+            # Update particles for all balls
+            self._update_ball_particles(ball, dt)
+
+            # Seeking logic - find a target if needed
+            if ball['state'] == 'seeking':
+                if not ball['target']:
+                    # Find nearby monsters within seek_range
+                    potential_targets = []
+                    for monster in monsters:
+                        distance = self._calculate_distance(
+                            (ball['pos'][0], ball['pos'][1]),
+                            (monster.x, monster.y)
+                        )
+                        if distance <= self.seek_range:
+                            potential_targets.append((distance, monster))
+
+                    # Select closest target
+                    if potential_targets:
+                        potential_targets.sort(key=lambda x: x[0])
+                        ball['target'] = potential_targets[0][1]
+                        ball['state'] = 'attacking'
+                    else:
+                        # If no target, move in a circular pattern around player
+                        self._update_seeking_movement(ball, dt)
+                else:
+                    ball['state'] = 'attacking'
+
+            # Attacking logic - move toward target
+            if ball['state'] == 'attacking' and ball['target']:
+                monster = ball['target']
+
+                # Check if monster still exists and is alive
+                if monster not in monsters or monster.hp <= 0:
+                    ball['target'] = None
+                    ball['state'] = 'seeking'
+                    continue
+
+                # Calculate movement vector toward target
+                target_pos = [
+                    monster.x * TILE_SIZE + TILE_SIZE // 2,
+                    monster.y * TILE_SIZE + TILE_SIZE // 2
+                ]
+                current_pos = ball['screen_pos']
+
+                # Direction vector
+                dx = target_pos[0] - current_pos[0]
+                dy = target_pos[1] - current_pos[1]
+                distance = math.hypot(dx, dy)
+
+                # If reached the target, explode and damage
+                if distance < TILE_SIZE:
+                    # Record explosion
+                    self.explosions.append({
+                        'pos': (monster.x, monster.y),
+                        'screen_pos': target_pos,
+                        'time': 0.5,  # Explosion duration
+                        'size': TILE_SIZE * 2,
+                        'color': ball['color']
+                    })
+
+                    # Calculate damage
+                    dmg = self.damage_multiplier * random.uniform(0.8, 1.2)
+                    damage_results.append((monster, dmg))
+
+                    # Mark as exploded
+                    ball['state'] = 'exploded'
+                else:
+                    # Move toward target
+                    if distance > 0:
+                        move_step = ball['speed'] * dt * 60  # Speed in pixels per second
+                        ball['screen_pos'][0] += (dx / distance) * move_step
+                        ball['screen_pos'][1] += (dy / distance) * move_step
+
+                        # Update grid position
+                        ball['pos'][0] = ball['screen_pos'][0] // TILE_SIZE
+                        ball['pos'][1] = ball['screen_pos'][1] // TILE_SIZE
+
+        # Update explosions
+        for explosion in self.explosions[:]:
+            explosion['time'] -= dt
+            if explosion['time'] <= 0:
+                self.explosions.remove(explosion)
+
+        # Return True if the effect is still active
+        return self.progress < 1.0 or self.explosions, damage_results
+
+    def _update_ball_particles(self, ball, dt):
+        """Update the particles for a ball"""
+        # Add new particles
+        if ball['state'] != 'exploded' and random.random() < 0.3:
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(0.5, 2.0)
+            ball['particles'].append({
+                'pos': ball['screen_pos'].copy(),
+                'vel': [math.cos(angle) * speed, math.sin(angle) * speed],
+                'life': random.uniform(0.3, 0.7),
+                'max_life': 0.7,
+                'size': random.uniform(1, 3),
+                'color': self._lighten_color(ball['color'])
+            })
+
+        # Update existing particles
+        for particle in ball['particles'][:]:
+            particle['pos'][0] += particle['vel'][0]
+            particle['pos'][1] += particle['vel'][1]
+            particle['life'] -= dt
+
+            # Remove dead particles
+            if particle['life'] <= 0:
+                ball['particles'].remove(particle)
+
+    def _update_seeking_movement(self, ball, dt):
+        """Update movement for a ball in seeking state"""
+        # Orbit around the player's position with some randomness
+        time = pygame.time.get_ticks() / 1000
+        radius = 3 * TILE_SIZE
+
+        # Calculate new position in a circular path
+        ball['screen_pos'][0] = self.player_pos[0] * TILE_SIZE + TILE_SIZE // 2 + math.cos(
+            time + ball['phase']) * radius
+        ball['screen_pos'][1] = self.player_pos[1] * TILE_SIZE + TILE_SIZE // 2 + math.sin(
+            time + ball['phase']) * radius
+
+        # Add some randomness to make it look more dynamic
+        ball['screen_pos'][0] += random.uniform(-5, 5)
+        ball['screen_pos'][1] += random.uniform(-5, 5)
+
+        # Update grid position
+        ball['pos'][0] = ball['screen_pos'][0] // TILE_SIZE
+        ball['pos'][1] = ball['screen_pos'][1] // TILE_SIZE
+
+    def _calculate_distance(self, pos1, pos2):
+        """Calculate Manhattan distance between two grid positions"""
+        return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+
+    def _lighten_color(self, color):
+        """Create a lighter version of the color for particles"""
+        return tuple(min(c + 50, 255) for c in color)
+
+    def draw(self, screen):
+        """Draw the holy ball effect"""
+        # Draw explosions (behind balls)
+        for explosion in self.explosions:
+            self._draw_explosion(screen, explosion)
+
+        # Draw each holy ball
+        for ball in self.balls:
+            if ball['state'] == 'exploded':
+                continue
+
+            # Draw particles first (behind the ball)
+            for particle in ball['particles']:
+                alpha = int(255 * (particle['life'] / particle['max_life']))
+                particle_color = (*particle['color'], alpha)
+
+                # Draw particle
+                pygame.draw.circle(
+                    screen,
+                    particle_color,
+                    (int(particle['pos'][0]), int(particle['pos'][1])),
+                    int(particle['size'] * (particle['life'] / particle['max_life']))
+                )
+
+            # Draw the holy ball with pulsating effect
+            pulse = 0.8 + 0.2 * math.sin(pygame.time.get_ticks() / 100)
+            size = ball['size'] * pulse
+
+            # Draw outer glow
+            glow_surface = pygame.Surface(
+                (int(size * 2.5), int(size * 2.5)),
+                pygame.SRCALPHA
+            )
+            glow_color = (*ball['color'], 100)
+            pygame.draw.circle(
+                glow_surface,
+                glow_color,
+                (int(size * 1.25), int(size * 1.25)),
+                int(size * 1.2)
+            )
+            screen.blit(
+                glow_surface,
+                (int(ball['screen_pos'][0] - size * 1.25),
+                 int(ball['screen_pos'][1] - size * 1.25))
+            )
+
+            # Draw core of the ball
+            pygame.draw.circle(
+                screen,
+                ball['color'],
+                (int(ball['screen_pos'][0]), int(ball['screen_pos'][1])),
+                int(size)
+            )
+
+            # Draw inner light
+            inner_color = (255, 255, 255)  # White center
+            pygame.draw.circle(
+                screen,
+                inner_color,
+                (int(ball['screen_pos'][0]), int(ball['screen_pos'][1])),
+                int(size * 0.5)
+            )
+
+            # Draw electric arcs if in attacking mode
+            if ball['state'] == 'attacking' and ball['target']:
+                self._draw_electric_arc(screen, ball)
+
+    def _draw_explosion(self, screen, explosion):
+        """Draw an explosion effect"""
+        # Calculate explosion progress (1.0 to 0.0)
+        progress = explosion['time'] / 0.5
+
+        # Draw expanding rings
+        for i in range(3):
+            ring_progress = progress - (i * 0.2)
+            if ring_progress <= 0:
+                continue
+
+            ring_size = explosion['size'] * (1 - ring_progress) * (i + 1) * 0.5
+            ring_alpha = int(200 * ring_progress)
+            ring_color = (*explosion['color'], ring_alpha)
+
+            # Draw ring
+            ring_surface = pygame.Surface(
+                (int(ring_size * 2), int(ring_size * 2)),
+                pygame.SRCALPHA
+            )
+            pygame.draw.circle(
+                ring_surface,
+                ring_color,
+                (int(ring_size), int(ring_size)),
+                int(ring_size),
+                max(1, int(ring_size * 0.1))  # Ring thickness
+            )
+            screen.blit(
+                ring_surface,
+                (int(explosion['screen_pos'][0] - ring_size),
+                 int(explosion['screen_pos'][1] - ring_size))
+            )
+
+        # Draw random lightning bolts emanating from explosion center
+        if random.random() < 0.4:
+            for _ in range(2):
+                angle = random.uniform(0, math.pi * 2)
+                length = explosion['size'] * progress
+                end_x = explosion['screen_pos'][0] + math.cos(angle) * length
+                end_y = explosion['screen_pos'][1] + math.sin(angle) * length
+
+                # Draw jagged lightning line
+                points = self._generate_lightning_points(
+                    explosion['screen_pos'],
+                    (end_x, end_y),
+                    4
+                )
+
+                if len(points) > 1:
+                    for i in range(len(points) - 1):
+                        pygame.draw.line(
+                            screen,
+                            explosion['color'],
+                            points[i],
+                            points[i + 1],
+                            2
+                        )
+
+    def _draw_electric_arc(self, screen, ball):
+        """Draw electric arcs from ball to target"""
+        if not ball['target']:
+            return
+
+        # Get target position
+        target_pos = [
+            ball['target'].x * TILE_SIZE + TILE_SIZE // 2,
+            ball['target'].y * TILE_SIZE + TILE_SIZE // 2
+        ]
+
+        # Generate lightning path
+        points = self._generate_lightning_points(
+            ball['screen_pos'],
+            target_pos,
+            5  # Number of segments
+        )
+
+        # Draw the lightning path
+        if len(points) > 1:
+            for i in range(len(points) - 1):
+                # Alternate colors for more dynamic effect
+                color = ball['color'] if i % 2 == 0 else (255, 255, 255)
+
+                pygame.draw.line(
+                    screen,
+                    color,
+                    points[i],
+                    points[i + 1],
+                    max(1, int(ball['size'] * 0.15))  # Line thickness
+                )
+
+    def _generate_lightning_points(self, start, end, segments):
+        """Generate points for a jagged lightning effect"""
+        points = [tuple(map(int, start))]
+
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+
+        for i in range(1, segments):
+            # Calculate point along straight line
+            t = i / segments
+            x = start[0] + dx * t
+            y = start[1] + dy * t
+
+            # Add random displacement
+            displacement = (1 - t) * 15  # More displacement near start
+            x += random.uniform(-displacement, displacement)
+            y += random.uniform(-displacement, displacement)
+
+            points.append((int(x), int(y)))
+
+        points.append(tuple(map(int, end)))
+        return points
+
+# ---------------- 魔王重锤眩晕 --------------------
 class CrackEffect:
     def __init__(self, x, y, radius):
         self.x = x
@@ -1626,6 +2281,125 @@ class Game:
         pygame.draw.rect(self.screen, (139, 69, 19),
                          (px + TILE_SIZE // 4, py + head_radius * 2 + torso_height - 3,
                           TILE_SIZE // 2, 3))
+
+    # --------------- 玩家技能释放 -----------------
+
+    def cast_skill(self, skill_key):
+        skill = self.player.skills[skill_key]
+        if skill['current_cd'] > 0:
+            self.add_message(f"{skill['name']}冷却中!")
+            return
+
+        # 火球术（Q技能）
+        if skill_key == 'Q':
+            # 寻找有效目标
+            targets = [
+                m for m in self.monsters
+                if abs(m.x - self.player.x) + abs(m.y - self.player.y) <= skill['range']
+            ]
+
+            if not targets:
+                self.add_message("没有可攻击目标!")
+                return
+
+            target = random.choice(targets)
+            # 创建技能效果
+            effect = FireStrikeEffect(target.x, target.y, skill['radius'])
+            self.add_message(f"释放{skill['name']}!")
+
+            # 范围伤害
+            for dx in range(-skill['radius'], skill['radius'] + 1):
+                for dy in range(-skill['radius'], skill['radius'] + 1):
+                    if abs(dx) + abs(dy) <= skill['radius']:
+                        for m in self.monsters[:]:
+                            if m.x == target.x + dx and m.y == target.y + dy:
+                                dmg = self.player.atk * skill['damage_multiple']
+                                m.hp -= max(dmg - m.defense, 0)
+                                self.add_message(f"你对{m.name}造成{max(dmg - m.defense, 0)}点伤害！")
+                                if m.hp <= 0:
+                                    self.add_message(f"击败{m.name}，获得{m.coin}金币")
+                                    self.player.coins += m.coin
+
+            self.skill_effects.append(effect)
+
+        # 闪电链（R技能）
+        elif skill_key == 'E':
+            # 获取范围内最近的3个目标
+            targets = []
+            for m in self.monsters:
+                distance = self.calculate_distance(
+                    (self.player.x, self.player.y),
+                    (m.x, m.y)
+                )
+                if distance <= skill['range']:
+                    targets.append((distance, m))
+
+            if len(targets) < 1:
+                self.add_message("没有可攻击目标!")
+                return
+
+            # 按距离排序并选择前N个
+            targets.sort(key=lambda x: x[0])
+            selected = [m for _, m in targets[:skill['max_targets']]]
+
+            # 生成闪电链效果
+            last_pos = (self.player.x * TILE_SIZE + TILE_SIZE // 2,
+                        self.player.y * TILE_SIZE + TILE_SIZE // 2)
+            total_damage = 0
+
+            for i, monster in enumerate(selected):
+                # 计算伤害
+                dmg = self.player.atk * skill['damage_multiple']
+                dmg = max(dmg - monster.defense, 0)
+                monster.hp -= dmg
+                total_damage += dmg
+
+                # 闪电终点坐标
+                end_pos = (monster.x * TILE_SIZE + TILE_SIZE // 2,
+                           monster.y * TILE_SIZE + TILE_SIZE // 2)
+
+                # 创建闪电效果
+                effect = LightningEffect(
+                    start=last_pos,
+                    end=end_pos,
+                    duration=0.5,
+                    damage=dmg
+                )
+                self.skill_effects.append(effect)
+                self.add_message(f"释放{skill['name']}!")
+
+                # 更新上一个位置
+                last_pos = end_pos
+
+                # 处理怪物死亡
+                if monster.hp <= 0:
+                    self.add_message(f"击败{monster.name}，获得{monster.coin}金币")
+                    self.player.coins += monster.coin
+                    self.monsters.remove(monster)
+
+            self.add_message(f"闪电链造成总计{total_damage}点伤害！")
+
+        elif skill_key == 'R':
+            # Create holy balls effect
+            effect = HollyBallEffect(
+                player_pos=(self.player.x, self.player.y),
+                ball_count=skill['ball_count'],
+                seek_range=skill['seek_range'],
+                damage_multiplier=skill['damage_multiple']
+            )
+            self.skill_effects.append(effect)
+            self.add_message(f"释放{skill['name']}!")
+
+        elif skill_key == 'T':
+            effect = TripleAttack(
+                player_pos=(self.player.x, self.player.y),
+                attack_range=skill['range'],
+                damage_multiplier=skill['damage_multipliers']
+            )
+            self.skill_effects.append(effect)
+            self.add_message(f"释放{skill['name']}!")
+
+        skill['current_cd'] = skill['cooldown']
 
     # --------------- 游戏怪物绘制 -----------------
 
@@ -3379,6 +4153,11 @@ class Game:
         for monster in self.monsters:
             monster.attack_cooldown = max(0, monster.attack_cooldown - dt)
 
+        # 玩家技能释放冷却
+        for skill in self.player.skills.values():
+            if skill['current_cd'] > 0:
+                skill['current_cd'] -= dt
+
         # ------------------------- 玩家攻击逻辑 -------------------------
         if self.player.attack_cooldown <= 0:
             self.check_player_attack()
@@ -3424,6 +4203,51 @@ class Game:
                     self.skill_effects.remove(effect)
             elif isinstance(effect, BlueFireStrikeEffect):
                 if not effect.update(dt):
+                    self.skill_effects.remove(effect)
+            elif isinstance(effect, LightningEffect):
+                if not effect.update(dt):
+                    self.skill_effects.remove(effect)
+            elif isinstance(effect, HollyBallEffect):
+                still_active, damage_results = effect.update(dt, self.monsters)
+                # Apply damage to monsters
+                for monster, damage_multiplier in damage_results:
+                    if monster in self.monsters:  # Ensure monster still exists
+                        dmg = self.player.atk * damage_multiplier
+                        actual_damage = max(dmg - monster.defense, 0)
+                        monster.hp -= actual_damage
+                        self.add_message(f"神圣球对{monster.name}造成{actual_damage}点伤害！")
+
+                        # Handle monster death
+                        if monster.hp <= 0:
+                            self.add_message(f"击败{monster.name}，获得{monster.coin}金币")
+                            self.player.coins += monster.coin
+                            self.monsters.remove(monster)
+                if not still_active:
+                    self.skill_effects.remove(effect)
+
+            elif isinstance(effect, TripleAttack):
+                still_active, damage_results = effect.update(dt, self.monsters)
+
+                for monster, damage_multiplier in damage_results:
+                    if monster in self.monsters:  # Ensure monster still exists
+                        dmg = self.player.atk * damage_multiplier
+                        actual_damage = max(dmg - monster.defense, 0)
+                        monster.hp -= actual_damage
+
+                        if damage_multiplier == 0.8:
+                            self.add_message(f"三连斩·一段 对{monster.name}造成{actual_damage}点伤害！")
+                        elif damage_multiplier == 1.0:
+                            self.add_message(f"三连斩·二段 对{monster.name}造成{actual_damage}点伤害！")
+                        elif damage_multiplier == 1.5:
+                            self.add_message(f"三连斩·终结 对{monster.name}造成{actual_damage}点伤害！")
+                        else:
+                            self.add_message(f"三连斩 对{monster.name}造成{actual_damage}点伤害！")
+
+                        if monster.hp <= 0:
+                            self.add_message(f"击败{monster.name}，获得{monster.coin}金币")
+                            self.player.coins += monster.coin
+                            self.monsters.remove(monster)
+                if not still_active:
                     self.skill_effects.remove(effect)
 
         # ------------------------- 腐蚀效果更新 -------------------------
@@ -4055,139 +4879,125 @@ class Game:
 
     # 右侧玩家状态栏及日志
     def draw_left_panel(self):
-        panel_width = SIDEBAR_WIDTH  # 左侧面板宽度
+        panel_width = SIDEBAR_WIDTH
         panel = pygame.Surface((panel_width, SCREEN_HEIGHT), pygame.SRCALPHA)
         panel.fill((30, 30, 40, 200))  # 半透明深蓝灰底色
 
+        # 动态布局参数
+        current_y = 15  # 当前绘制Y坐标
+        section_gap = 20  # 模块间距
+        module_padding = 10  # 模块内边距
+
         # ------ 状态栏标题 ------
         title_font = pygame.font.SysFont("SimHei", 24, bold=True)
-        title = title_font.render("勇者状态", True, (255, 215, 0))  # 金色标题
-        panel.blit(title, (20, 15))
+        title = title_font.render("勇者状态", True, (255, 215, 0))
+        panel.blit(title, (20, current_y))
+        current_y += 40  # 标题高度+间距
 
         # ------ 核心属性区域 ------
-        attr_bg = pygame.Surface((260, 100), pygame.SRCALPHA)
-        attr_bg.fill((40, 40, 60, 150))  # 半透明深色背景
-        pygame.draw.rect(attr_bg, (80, 80, 100), (0, 0, 260, 100), 2)  # 边框
+        attr_height = 100
+        attr_bg = pygame.Surface((260, attr_height), pygame.SRCALPHA)
+        attr_bg.fill((40, 40, 60, 150))
+        pygame.draw.rect(attr_bg, (80, 80, 100), (0, 0, 260, attr_height), 2)
 
         # 数值显示
         info_font = pygame.font.SysFont("SimSun", 20, bold=True)
-        # ATK
-        atk_text = info_font.render(f"ATK: {self.player.atk}", True, (255, 180, 180))
-        attr_bg.blit(atk_text, (40, 20))
-        # DEF
-        def_text = info_font.render(f"DEF: {self.player.defense}", True, (180, 200, 255))
-        attr_bg.blit(def_text, (40, 45))
-        # HP
-        hp_percent = self.player.hp / self.player.max_hp
-        hp_color = (50, 200, 50) if hp_percent > 0.3 else (200, 50, 50)
-        hp_text = info_font.render(f"HP: {self.player.hp}/{self.player.max_hp}", True, hp_color)
-        attr_bg.blit(hp_text, (40, 70))
+        attr_bg.blit(info_font.render(f"ATK: {self.player.atk}", True, (255, 180, 180)), (40, 20))
+        attr_bg.blit(info_font.render(f"DEF: {self.player.defense}", True, (180, 200, 255)), (40, 45))
+        hp_color = (50, 200, 50) if self.player.hp / self.player.max_hp > 0.3 else (200, 50, 50)
+        attr_bg.blit(info_font.render(f"HP: {self.player.hp}/{self.player.max_hp}", True, hp_color), (40, 70))
 
-        panel.blit(attr_bg, (20, 60))
+        panel.blit(attr_bg, (20, current_y))
+        current_y += attr_height + section_gap
 
         # ------ 金币和楼层信息 ------
-        meta_bg = pygame.Surface((260, 50), pygame.SRCALPHA)
+        meta_height = 50
+        meta_bg = pygame.Surface((260, meta_height), pygame.SRCALPHA)
         meta_bg.fill((60, 60, 80, 150))
-        pygame.draw.rect(meta_bg, (80, 80, 100), (0, 0, 260, 50), 2)
+        pygame.draw.rect(meta_bg, (80, 80, 100), (0, 0, 260, meta_height), 2)
 
         # 金币图标
-        pygame.draw.circle(meta_bg, (255, 215, 0), (30, 25), 12)  # 金币
-        pygame.draw.line(meta_bg, (200, 160, 0), (25, 25), (35, 25), 3)  # 金币纹路
-        coin_text = info_font.render(f"{self.player.coins}", True, (255, 215, 0))
-        meta_bg.blit(coin_text, (50, 15))
+        pygame.draw.circle(meta_bg, (255, 215, 0), (30, 25), 12)
+        pygame.draw.line(meta_bg, (200, 160, 0), (25, 25), (35, 25), 3)
+        meta_bg.blit(info_font.render(f"{self.player.coins}", True, (255, 215, 0)), (50, 15))
 
         # 楼层图标
-        pygame.draw.rect(meta_bg, (147, 112, 219), (160, 10, 30, 30), border_radius=5)  # 紫色方块
-        level_text = info_font.render(f"{self.floor}F", True, (200, 180, 255))
-        meta_bg.blit(level_text, (200, 15))
+        pygame.draw.rect(meta_bg, (147, 112, 219), (160, 10, 30, 30), border_radius=5)
+        meta_bg.blit(info_font.render(f"{self.floor}F", True, (200, 180, 255)), (200, 15))
 
-        panel.blit(meta_bg, (20, 180))
+        panel.blit(meta_bg, (20, current_y))
+        current_y += meta_height + section_gap
 
         # ------ 装备信息区域 ------
-        equip_bg = pygame.Surface((260, 80), pygame.SRCALPHA)
+        equip_height = 80
+        equip_bg = pygame.Surface((260, equip_height), pygame.SRCALPHA)
         equip_bg.fill((40, 40, 60, 150))
-        pygame.draw.rect(equip_bg, (80, 80, 100), (0, 0, 260, 80), 2)  # 边框
+        pygame.draw.rect(equip_bg, (80, 80, 100), (0, 0, 260, equip_height), 2)
 
-        # 图标设计
-        # 武器图标（剑）
-        pygame.draw.line(equip_bg, (192, 192, 192), (20, 20), (35, 35), 3)
-        pygame.draw.polygon(equip_bg, (255, 215, 0),
-                            [(35, 35), (40, 30), (45, 35), (40, 40)])
-        # 护甲图标（盾牌）
-        shield_points = [
-            (180, 20), (195, 25), (195, 45),
-            (180, 50), (165, 45), (165, 25)
-        ]
-        pygame.draw.polygon(equip_bg, (139, 69, 19), shield_points)
-
-        # 文字信息
-        eq_font = pygame.font.SysFont("SimSun", 16)
         # 武器信息
+        eq_font = pygame.font.SysFont("SimSun", 16)
         weapon = self.player.equipped_weapon
         weapon_text = f"武: {weapon['name']}" if weapon else "武: 无"
-        weapon_color = (200, 200, 200) if weapon else (150, 150, 150)
-        eq_text = eq_font.render(weapon_text, True, weapon_color)
-        equip_bg.blit(eq_text, (50, 10))  # 调整垂直位置
-
-        if weapon:
-            # 显示攻击属性
-            detail_text = f"ATK+{weapon['atk']}"
-            eq_detail = eq_font.render(detail_text, True, (180, 180, 255))
-            equip_bg.blit(eq_detail, (50, 30))
-
-            # 显示耐久度（红色渐变）
-            durability_text = f"耐久: {weapon['durability']}/{EQUIPMENT_TYPES[weapon['tag']]['durability']}"
-            durability_ratio = weapon['durability'] / EQUIPMENT_TYPES[weapon['tag']]['durability']
-            color = (255, int(255 * durability_ratio), 0)  # 从绿到红渐变
-            durability_surf = eq_font.render(durability_text, True, color)
-            equip_bg.blit(durability_surf, (50, 50))
+        equip_bg.blit(eq_font.render(weapon_text, True, (200, 200, 200) if weapon else (150, 150, 150)), (50, 10))
 
         # 护甲信息
         armor = self.player.equipped_armor
         armor_text = f"甲: {armor['name']}" if armor else "甲: 无"
-        armor_color = (200, 200, 200) if armor else (150, 150, 150)
-        eq_text = eq_font.render(armor_text, True, armor_color)
-        equip_bg.blit(eq_text, (160, 10))  # 调整垂直位置
+        equip_bg.blit(eq_font.render(armor_text, True, (200, 200, 200) if armor else (150, 150, 150)), (160, 10))
 
-        if armor:
-            # 显示防御属性
-            detail_text = f"DEF+{armor['def']}"
-            eq_detail = eq_font.render(detail_text, True, (180, 255, 180))
-            equip_bg.blit(eq_detail, (160, 30))
+        panel.blit(equip_bg, (20, current_y))
+        current_y += equip_height + section_gap
 
-            # 显示耐久度（蓝色渐变）
-            durability_text = f"耐久: {armor['durability']}/{EQUIPMENT_TYPES[armor['tag']]['durability']}"
-            durability_ratio = armor['durability'] / EQUIPMENT_TYPES[armor['tag']]['durability']
-            color = (int(255 * (1 - durability_ratio)), int(255 * durability_ratio), 255)  # 从蓝到青渐变
-            durability_surf = eq_font.render(durability_text, True, color)
-            equip_bg.blit(durability_surf, (160, 50))
+        # ------ 技能面板 ------
+        skill_height = 150  # 固定高度
+        skill_bg = pygame.Surface((260, skill_height), pygame.SRCALPHA)
+        skill_bg.fill((40, 40, 60, 200))
+        pygame.draw.rect(skill_bg, (80, 80, 100), (0, 0, 260, skill_height), 2)
 
-        panel.blit(equip_bg, (20, 240))
+        skill_font = pygame.font.SysFont("SimSun", 18)
+        for i, (key, skill) in enumerate(self.player.skills.items()):
+            y_pos = 10 + i * 50
+            # 技能名称
+            name_color = (255, 255, 0) if skill['current_cd'] <= 0 else (100, 100, 100)
+            skill_bg.blit(skill_font.render(f"{key}: {skill['name']}", True, name_color), (10, y_pos))
+            # 冷却条
+            cd_ratio = skill['current_cd'] / skill['cooldown'] if skill['current_cd'] > 0 else 0
+            pygame.draw.rect(skill_bg, (80, 80, 80), (10, y_pos + 25, 240, 12))
+            pygame.draw.rect(skill_bg, (0, 200, 0), (10, y_pos + 25, 240 * (1 - cd_ratio), 12))
+
+        panel.blit(skill_bg, (20, current_y))
+        current_y += skill_height + section_gap
 
         # ------ 消息日志区域 ------
-        log_bg = pygame.Surface((260, SCREEN_HEIGHT - 340), pygame.SRCALPHA)
+        log_height = SCREEN_HEIGHT - current_y - 20  # 动态计算剩余高度
+        log_bg = pygame.Surface((260, log_height), pygame.SRCALPHA)
         log_bg.fill((40, 40, 60, 200))
-        pygame.draw.rect(log_bg, (80, 80, 100), (0, 0, 260, log_bg.get_height()), 2)
+        pygame.draw.rect(log_bg, (80, 80, 100), (0, 0, 260, log_height), 2)
 
-        log_font = pygame.font.SysFont("SimSun", 18)
-        # 显示最近10条消息
-        for i, msg in enumerate(self.message_log[-self.max_log_lines:]):
-            # 根据消息类型设置颜色
-            if "gain" in msg.lower():
-                color = (50, 200, 50)  # 绿色-获得物品
-            elif "damage" in msg.lower():
-                color = (200, 50, 50)  # 红色-受到伤害
-            elif "defeat" in msg.lower():
-                color = (200, 200, 50)  # 黄色-击败敌人
-            else:
-                color = (200, 200, 200)  # 灰色-普通消息
+        log_font = pygame.font.SysFont("SimSun", 16)
+        visible_messages = self.message_log[-self.max_log_lines:]
+        for i, msg in enumerate(visible_messages):
+            # 颜色逻辑保持不变
+            text_surface = log_font.render(msg, True, self._get_message_color(msg))
+            log_bg.blit(text_surface, (10, 10 + i * 18))
 
-            text_surface = log_font.render(msg, True, color)
-            log_bg.blit(text_surface, (10, 10 + i * 20))
+        panel.blit(log_bg, (20, current_y))
 
-        panel.blit(log_bg, (20, 330))
         # 绘制到主屏幕左侧
-        self.screen.blit(panel, (MAP_WIDTH * TILE_SIZE, 0))  # 修改这里，将面板绘制在屏幕右侧
+        self.screen.blit(panel, (MAP_WIDTH * TILE_SIZE, 0))
+
+
+    def _get_message_color(self, msg):
+        """根据消息类型返回颜色"""
+        if "获得" in msg.lower():
+            return (50, 200, 50)  # 绿色
+        elif "伤害" in msg.lower():
+            return (200, 50, 50)  # 红色
+        elif "释放" in msg.lower():
+            return (255, 215, 0)  # 金色
+        elif "传送" in msg:
+            return (100, 200, 255)  # 蓝色
+        return (200, 200, 200)  # 默认灰色
 
     def draw_equipment(self, item):
         x = item.x * TILE_SIZE
@@ -4844,6 +5654,14 @@ class Game:
                     self.player.move(-1, 0, self)
                 elif event.key == pygame.K_d:
                     self.player.move(1, 0, self)
+                elif event.key == pygame.K_q:
+                    self.cast_skill('Q')
+                elif event.key == pygame.K_e:
+                    self.cast_skill('E')
+                elif event.key == pygame.K_r:
+                    self.cast_skill('R')
+                elif event.key == pygame.K_t:
+                    self.cast_skill('T')
             elif event.type == pygame.MOUSEBUTTONDOWN:  # 处理鼠标点击
                 if event.button == 1:  # 左键点击
                     self.handle_mouse_click(event.pos)
