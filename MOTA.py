@@ -54,8 +54,13 @@ COLOR_HP = (255, 0, 0)
 COLOR_ATK = (255, 165, 0)
 COLOR_DEF = (0, 255, 255)
 
-# 怪物追踪距离
-MONSTER_DISTANCE = 6
+# -------- 怪物追踪系统设置 --------
+MONSTER_DISTANCE = 6                  # 怪物追踪距离
+MONSTER_TRACKING_DURATION = 10.0       # 追踪持续时间(秒)
+MONSTER_PATH_UPDATE_RATE = 1.0        # 路径更新频率(秒)
+MONSTER_TRACKING_INDICATORS = True    # 是否显示追踪指示器
+MONSTER_PATH_VISUALIZATION = True     # 是否显示路径可视化
+MONSTER_DEBUG_INFO = False            # 是否显示调试信息
 
 MAX_ROOM = 6
 MAX_ROOM_SIZE = 19
@@ -71,7 +76,7 @@ LIGHTNINGEFFECT_BLUE = False
 # 怪物强度参数
 S_MONSTER = 2
 
-N = 3
+N = 5
 # 普通怪物数目范围
 MONSTER_MIN = math.ceil(N)
 MONSTER_MAX = math.ceil(N * 8)
@@ -91,7 +96,7 @@ ITEM_MIN = math.ceil(8)
 ITEM_MAX = math.ceil(M * 8)
 
 # 普通怪物权重
-MONSTER_WEIGHT = [10, 10, 5, 5, 5, 12, 16, 12, 8, 6, 5, 5, 8, 2, 1, 1, 1, 1, 1, 1, 1]  # [0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+MONSTER_WEIGHT = [10, 10, 5, 5, 5, 12, 16, 12, 8, 6, 5, 5, 8, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
  # --------------------------- 实体列表 ------------------------------
 
@@ -141,7 +146,9 @@ monsters_data = [
     {"name": "火焰领主", "HP": 6500, "ATK": 130, "DEF": 60, "size": (3, 3),
      "attack_range": 3, "attack_speed": 0.6, "coin": 1500, "speed": 60, "level": 7},
     {"name": "纯火焰领主", "HP": 7500, "ATK": 180, "DEF": 80, "size": (3, 3),
-     "attack_range": 3, "attack_speed": 0.7, "coin": 1900, "speed": 50, "level": 8}
+     "attack_range": 3, "attack_speed": 0.7, "coin": 1900, "speed": 50, "level": 8},
+    {"name": "神圣灾祸骑士", "HP": 10000, "ATK": 250, "DEF": 180, "size": (3, 3),
+     "attack_range": 7, "attack_speed": 0.7, "coin": 3000, "speed": 40, "level": 9}
 ]
 
 # 道具类型
@@ -315,346 +322,1135 @@ EQUIPMENT_TYPES = {
 class SettingsMenu:
     def __init__(self, screen):
         self.screen = screen
-        self.font = pygame.font.Font(None, 36)
-        self.back_button = pygame.Rect(50, 400, 200, 50)
-        self.apply_button = pygame.Rect(300, 400, 200, 50)
+        self.screen_width, self.screen_height = screen.get_size()
+
+        # 颜色方案
+        self.colors = {
+            'background': (25, 25, 35),  # 深色背景
+            'panel': (35, 35, 45),  # 面板背景
+            'panel_border': (60, 60, 80),  # 面板边框
+            'text': (220, 220, 220),  # 文字颜色
+            'title': (255, 215, 0),  # 标题颜色
+            'slider_bg': (50, 50, 70),  # 滑动条背景
+            'slider_handle': (100, 150, 255),  # 滑动条把手
+            'slider_active': (120, 170, 255),  # 滑动条激活颜色
+            'button': (60, 60, 80),  # 按钮背景
+            'button_hover': (80, 80, 100),  # 按钮悬停
+            'button_border': (100, 100, 120),  # 按钮边框
+            'button_text': (220, 220, 220),  # 按钮文字
+            'accent': (100, 150, 255),  # 强调色
+            'section': (210, 180, 140)  # 分区标题颜色
+        }
+
+        # 字体设置 - 使用系统中文字体
+        try:
+            self.title_font = pygame.font.SysFont("SimHei", 42, bold=True)
+            self.section_font = pygame.font.SysFont("SimHei", 32, bold=True)
+            self.label_font = pygame.font.SysFont("SimHei", 28)
+            self.button_font = pygame.font.SysFont("SimHei", 32)
+        except:
+            # 尝试其他中文字体
+            try:
+                self.title_font = pygame.font.SysFont("Microsoft YaHei", 42, bold=True)
+                self.section_font = pygame.font.SysFont("Microsoft YaHei", 32, bold=True)
+                self.label_font = pygame.font.SysFont("Microsoft YaHei", 28)
+                self.button_font = pygame.font.SysFont("Microsoft YaHei", 32)
+            except:
+                # 最后尝试系统默认字体
+                self.title_font = pygame.font.Font(None, 42)
+                self.section_font = pygame.font.Font(None, 32)
+                self.label_font = pygame.font.Font(None, 28)
+                self.button_font = pygame.font.Font(None, 32)
+                print("警告: 未能加载中文字体，将使用默认字体")
+
+        # 布局参数
+        panel_width = 700  # 增加宽度以容纳更多滑动条
+        panel_height = 1000  # 进一步增加高度以避免按钮与滑动条重合
+        self.panel_rect = pygame.Rect(
+            (self.screen_width - panel_width) // 2,
+            (self.screen_height - panel_height) // 2,
+            panel_width, panel_height
+        )
+
+        # 滑动条设置
+        slider_width = 400
+        slider_height = 8
+        slider_y_start = self.panel_rect.top + 120
+        slider_spacing = 90  # 进一步增加滑动条之间的垂直间距
+
+        # 第一个分区 - 地图设置
+        map_section_y = slider_y_start
+
         self.sliders = [
-            {"label": "Map Width", "value": CONFIG["MAP_WIDTH"], "min": 21, "max": 51,
-             "rect": pygame.Rect(100, 100, 400, 20)},
-            {"label": "Map Height", "value": CONFIG["MAP_HEIGHT"], "min": 21, "max": 51,
-             "rect": pygame.Rect(100, 150, 400, 20)},
-            {"label": "Tile Size", "value": CONFIG["TILE_SIZE"], "min": 20, "max": 80,
-             "rect": pygame.Rect(100, 200, 400, 20)}
+            {
+                "label": "地图宽度",
+                "value": CONFIG["MAP_WIDTH"],
+                "min": 21, "max": 51,
+                "step": 2,  # 确保总是奇数
+                "rect": pygame.Rect(
+                    self.panel_rect.centerx - slider_width // 2,
+                    map_section_y,
+                    slider_width, slider_height
+                ),
+                "hover": False,
+                "tooltip": "设置地图的宽度 (格子数)",
+                "section": "地图设置"
+            },
+            {
+                "label": "地图高度",
+                "value": CONFIG["MAP_HEIGHT"],
+                "min": 21, "max": 51,
+                "step": 2,  # 确保总是奇数
+                "rect": pygame.Rect(
+                    self.panel_rect.centerx - slider_width // 2,
+                    map_section_y + slider_spacing,
+                    slider_width, slider_height
+                ),
+                "hover": False,
+                "tooltip": "设置地图的高度 (格子数)",
+                "section": "地图设置"
+            },
+            {
+                "label": "方块大小",
+                "value": CONFIG["TILE_SIZE"],
+                "min": 20, "max": 80,
+                "step": 1,
+                "rect": pygame.Rect(
+                    self.panel_rect.centerx - slider_width // 2,
+                    map_section_y + slider_spacing * 2,
+                    slider_width, slider_height
+                ),
+                "hover": False,
+                "tooltip": "设置每个方块的像素大小",
+                "section": "地图设置"
+            },
+
+        # 第二个分区 - 游戏难度设置
+            {
+                "label": "怪物追踪距离",
+                "value": MONSTER_DISTANCE,
+                "min": 3, "max": 10,
+                "step": 1,
+                "rect": pygame.Rect(
+                    self.panel_rect.centerx - slider_width // 2,
+                    map_section_y + slider_spacing * 3 + 60,  # 额外间距用于分区标题
+                    slider_width, slider_height
+                ),
+                "hover": False,
+                "tooltip": "设置怪物开始追踪玩家的距离",
+                "section": "游戏难度设置"
+            },
+            {
+                "label": "怪物追踪持续时间",
+                "value": MONSTER_TRACKING_DURATION,
+                "min": 2.0, "max": 10.0,
+                "step": 0.5,
+                "rect": pygame.Rect(
+                    self.panel_rect.centerx - slider_width // 2,
+                    map_section_y + slider_spacing * 4 + 60,
+                    slider_width, slider_height
+                ),
+                "hover": False,
+                "tooltip": "设置怪物丢失目标后继续追踪的时间(秒)",
+                "section": "游戏难度设置"
+            },
+            {
+                "label": "怪物生成数目",
+                "value": N,
+                "min": 1, "max": 10,
+                "step": 1,
+                "rect": pygame.Rect(
+                    self.panel_rect.centerx - slider_width // 2,
+                    map_section_y + slider_spacing * 5 + 60,
+                    slider_width, slider_height
+                ),
+                "hover": False,
+                "tooltip": "设置每层生成的怪物数量基数 (影响最小/最大值)",
+                "section": "游戏难度设置"
+            },
+            {
+                "label": "道具生成数目",
+                "value": M,
+                "min": 2, "max": 8,
+                "step": 1,
+                "rect": pygame.Rect(
+                    self.panel_rect.centerx - slider_width // 2,
+                    map_section_y + slider_spacing * 6 + 60,
+                    slider_width, slider_height
+                ),
+                "hover": False,
+                "tooltip": "设置每层生成的道具数量基数 (影响最小/最大值)",
+                "section": "游戏难度设置"
+            }
         ]
+
+        # 找出所有不同的分区
+        self.sections = []
+        for slider in self.sliders:
+            if slider["section"] not in self.sections:
+                self.sections.append(slider["section"])
+
+        # 按钮设置
+        button_width = 180
+        button_height = 60
+        button_y = self.panel_rect.bottom - 120  # 进一步下移按钮位置，远离最后一个滑动条
+
+        self.back_button = {
+            'rect': pygame.Rect(
+                self.panel_rect.centerx - button_width - 20,
+                button_y,
+                button_width, button_height
+            ),
+            'text': "返回",
+            'hover': False,
+            'active': False
+        }
+
+        self.apply_button = {
+            'rect': pygame.Rect(
+                self.panel_rect.centerx + 20,
+                button_y,
+                button_width, button_height
+            ),
+            'text': "应用",
+            'hover': False,
+            'active': False
+        }
+
+        # 拖动状态
         self.dragging = None
 
-    def draw_slider(self, slider, y):
-        pygame.draw.rect(self.screen, (200, 200, 200), slider["rect"])
-        ratio = (slider["value"] - slider["min"]) / (slider["max"] - slider["min"])
-        handle_x = slider["rect"].x + ratio * (slider["rect"].width - 20)
-        pygame.draw.rect(self.screen, (0, 128, 255), (handle_x, slider["rect"].y - 10, 20, 40))
+        # 动画效果
+        self.animation_time = 0
+        self.show_tooltip = False
+        self.tooltip_text = ""
+        self.tooltip_pos = (0, 0)
 
-        label = self.font.render(f"{slider['label']}: {slider['value']}", True, (255, 255, 255))
+        # 创建背景图案
+        self.background_pattern = self.create_background_pattern()
+
+    def create_background_pattern(self):
+        """创建美观的背景图案"""
+        pattern_size = 100
+        pattern = pygame.Surface((pattern_size, pattern_size), pygame.SRCALPHA)
+
+        # 背景底色
+        pattern.fill(self.colors['background'])
+
+        # 添加微妙的格子线条
+        for i in range(0, pattern_size, 20):
+            pygame.draw.line(pattern, (40, 40, 50, 30), (0, i), (pattern_size, i), 1)
+            pygame.draw.line(pattern, (40, 40, 50, 30), (i, 0), (i, pattern_size), 1)
+
+        # 添加点缀
+        for _ in range(3):
+            x = random.randint(0, pattern_size)
+            y = random.randint(0, pattern_size)
+            pygame.draw.circle(pattern, (60, 60, 80, 20), (x, y), random.randint(2, 5))
+
+        return pattern
+
+    def draw_slider(self, slider):
+        """绘制精美的滑动条"""
+        # 滑动条背景
+        pygame.draw.rect(self.screen, self.colors['slider_bg'], slider["rect"], border_radius=4)
+
+        # 滑动条激活部分
+        ratio = (slider["value"] - slider["min"]) / (slider["max"] - slider["min"])
+        active_width = int(slider["rect"].width * ratio)
+        active_rect = pygame.Rect(
+            slider["rect"].x, slider["rect"].y,
+            active_width, slider["rect"].height
+        )
+        pygame.draw.rect(self.screen, self.colors['accent'], active_rect, border_radius=4)
+
+        # 滑动条把手
+        handle_x = slider["rect"].x + active_width - 8
+        handle_y = slider["rect"].y - 12
+        handle_rect = pygame.Rect(handle_x, handle_y, 16, 32)
+
+        # 把手发光效果
+        if slider["hover"] or self.dragging == self.sliders.index(slider):
+            glow = pygame.Surface((40, 40), pygame.SRCALPHA)
+            pygame.draw.circle(glow, (*self.colors['slider_active'], 50), (20, 20), 15)
+            self.screen.blit(glow, (handle_rect.centerx - 20, handle_rect.centery - 20))
+
+        # 绘制把手
+        handle_color = self.colors['slider_active'] if slider["hover"] or self.dragging == self.sliders.index(
+            slider) else self.colors['slider_handle']
+        pygame.draw.rect(self.screen, handle_color, handle_rect, border_radius=8)
+
+        # 高光效果
+        if slider["hover"] or self.dragging == self.sliders.index(slider):
+            highlight = pygame.Surface((12, 28), pygame.SRCALPHA)
+            highlight_rect = pygame.Rect(0, 0, 12, 28)
+            pygame.draw.rect(highlight, (255, 255, 255, 50), highlight_rect, border_radius=6)
+            self.screen.blit(highlight, (handle_x + 2, handle_y + 2))
+
+        # 绘制标签
+        label = self.label_font.render(f"{slider['label']}", True, self.colors['text'])
         self.screen.blit(label, (slider["rect"].x, slider["rect"].y - 40))
 
+        # 绘制数值
+        value_text = self.label_font.render(f"{slider['value']}", True, self.colors['accent'])
+        self.screen.blit(value_text, (slider["rect"].right - value_text.get_width(), slider["rect"].y - 40))
+
+    def draw_button(self, button):
+        """绘制精美的按钮"""
+        # 按钮背景
+        button_color = self.colors['button_hover'] if button['hover'] else self.colors['button']
+        if button['active']:
+            # 按下效果
+            button_rect = pygame.Rect(button['rect'].x, button['rect'].y + 2, button['rect'].width,
+                                      button['rect'].height)
+        else:
+            button_rect = button['rect']
+
+        pygame.draw.rect(self.screen, button_color, button_rect, border_radius=10)
+
+        # 按钮边框
+        pygame.draw.rect(self.screen, self.colors['button_border'], button_rect, 2, border_radius=10)
+
+        # 按钮文字
+        text = self.button_font.render(button['text'], True, self.colors['button_text'])
+        text_rect = text.get_rect(center=button_rect.center)
+        self.screen.blit(text, text_rect)
+
+        # 按钮悬停效果
+        if button['hover'] and not button['active']:
+            # 微妙的光晕
+            glow = pygame.Surface((button_rect.width + 20, button_rect.height + 20), pygame.SRCALPHA)
+            pygame.draw.rect(glow, (*self.colors['accent'], 30),
+                             (10, 10, button_rect.width, button_rect.height),
+                             border_radius=10)
+            self.screen.blit(glow,
+                             (button_rect.x - 10, button_rect.y - 10))
+
+    def draw_tooltip(self):
+        """绘制工具提示"""
+        if not self.show_tooltip:
+            return
+
+        # 工具提示背景
+        text = self.label_font.render(self.tooltip_text, True, self.colors['text'])
+        padding = 10
+        tooltip_rect = pygame.Rect(
+            self.tooltip_pos[0], self.tooltip_pos[1],
+            text.get_width() + padding * 2, text.get_height() + padding * 2
+        )
+
+        # 确保工具提示在屏幕内
+        if tooltip_rect.right > self.screen_width:
+            tooltip_rect.right = self.screen_width - 5
+        if tooltip_rect.bottom > self.screen_height:
+            tooltip_rect.bottom = self.screen_height - 5
+
+        # 绘制背景
+        pygame.draw.rect(self.screen, (40, 40, 50, 230), tooltip_rect, border_radius=5)
+        pygame.draw.rect(self.screen, self.colors['panel_border'], tooltip_rect, 1, border_radius=5)
+
+        # 绘制文字
+        self.screen.blit(text, (tooltip_rect.x + padding, tooltip_rect.y + padding))
+
     def draw(self):
-        self.screen.fill((30, 30, 50))
+        """绘制整个设置界面"""
+        # 填充背景
+        for y in range(0, self.screen_height, 100):
+            for x in range(0, self.screen_width, 100):
+                self.screen.blit(self.background_pattern, (x, y))
+
+        # 半透明中央面板
+        panel_surface = pygame.Surface((self.panel_rect.width, self.panel_rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(panel_surface, (*self.colors['panel'], 250),
+                         (0, 0, self.panel_rect.width, self.panel_rect.height),
+                         border_radius=15)
+
+        # 面板边框
+        pygame.draw.rect(panel_surface, self.colors['panel_border'],
+                         (0, 0, self.panel_rect.width, self.panel_rect.height),
+                         2, border_radius=15)
+
+        # 面板顶部装饰
+        pygame.draw.rect(panel_surface, self.colors['accent'],
+                         (20, 0, self.panel_rect.width - 40, 5),
+                         border_radius=2)
+
+        self.screen.blit(panel_surface, self.panel_rect.topleft)
+
+        # 标题
+        title = self.title_font.render("游戏设置", True, self.colors['title'])
+        title_rect = title.get_rect(centerx=self.panel_rect.centerx, top=self.panel_rect.top + 30)
+        self.screen.blit(title, title_rect)
+
+        # 分隔线
+        pygame.draw.line(self.screen, self.colors['panel_border'],
+                         (self.panel_rect.left + 40, title_rect.bottom + 20),
+                         (self.panel_rect.right - 40, title_rect.bottom + 20),
+                         2)
+
+        # 绘制分区标题和滑动条
+        current_section = ""
         for slider in self.sliders:
-            self.draw_slider(slider, slider["rect"].y)
+            # 如果到了新的分区，绘制分区标题
+            if slider["section"] != current_section:
+                current_section = slider["section"]
+
+                # 计算分区标题位置（放在第一个该分区滑动条的上方）
+                section_y = slider["rect"].y - 80
+
+                # 绘制分区标题
+                section_text = self.section_font.render(current_section, True, self.colors['section'])
+                self.screen.blit(section_text, (self.panel_rect.left + 40, section_y))
+
+                # 分区下方的短分隔线
+                pygame.draw.line(self.screen, self.colors['section'],
+                                 (self.panel_rect.left + 40, section_y + 35),
+                                 (self.panel_rect.left + 40 + section_text.get_width(), section_y + 35),
+                                 1)
+
+            # 绘制滑动条
+            self.draw_slider(slider)
 
         # 绘制按钮
-        pygame.draw.rect(self.screen, (70, 70, 70), self.back_button)
-        back_text = self.font.render("Back", True, (255, 255, 255))
-        self.screen.blit(back_text, (self.back_button.x + 70, self.back_button.y + 15))
+        self.draw_button(self.back_button)
+        self.draw_button(self.apply_button)
 
-        pygame.draw.rect(self.screen, (70, 70, 70), self.apply_button)
-        apply_text = self.font.render("Apply", True, (255, 255, 255))
-        self.screen.blit(apply_text, (self.apply_button.x + 70, self.apply_button.y + 15))
+        # 绘制工具提示
+        self.draw_tooltip()
 
+        # 更新显示
         pygame.display.flip()
 
+    def update(self, dt):
+        """更新动画和状态"""
+        self.animation_time += dt
+
+        # 更新按钮悬停状态
+        mouse_pos = pygame.mouse.get_pos()
+        self.back_button['hover'] = self.back_button['rect'].collidepoint(mouse_pos)
+        self.apply_button['hover'] = self.apply_button['rect'].collidepoint(mouse_pos)
+
+        # 更新滑动条悬停状态
+        self.show_tooltip = False
+        for slider in self.sliders:
+            # 检查把手区域
+            handle_x = slider["rect"].x + int(slider["rect"].width *
+                                              ((slider["value"] - slider["min"]) /
+                                               (slider["max"] - slider["min"]))) - 8
+            handle_y = slider["rect"].y - 12
+            handle_rect = pygame.Rect(handle_x, handle_y, 16, 32)
+
+            slider['hover'] = handle_rect.collidepoint(mouse_pos)
+
+            # 检查是否显示工具提示
+            label_rect = pygame.Rect(
+                slider["rect"].x, slider["rect"].y - 40,
+                slider["rect"].width, 40
+            )
+            if label_rect.collidepoint(mouse_pos) and 'tooltip' in slider:
+                self.show_tooltip = True
+                self.tooltip_text = slider['tooltip']
+                self.tooltip_pos = (mouse_pos[0], mouse_pos[1] - 40)
+
     def handle_event(self, event):
+        """处理用户输入事件"""
         if event.type == pygame.MOUSEBUTTONDOWN:
-            for i, slider in enumerate(self.sliders):
-                if slider["rect"].collidepoint(event.pos):
-                    self.dragging = i
-            if self.back_button.collidepoint(event.pos):
-                return "menu"
-            elif self.apply_button.collidepoint(event.pos):
-                CONFIG["SCREEN_WIDTH"] = self.sliders[0]["value"] * self.sliders[2]["value"] + 600
-                CONFIG["SCREEN_HEIGHT"] = self.sliders[1]["value"] * self.sliders[2]["value"]
-                CONFIG["TILE_SIZE"] = self.sliders[2]["value"]
-                CONFIG["MAP_WIDTH"] = self.sliders[0]["value"]
-                CONFIG["MAP_HEIGHT"] = self.sliders[1]["value"]
-                return "apply"
+            if event.button == 1:  # 左键点击
+                # 检查滑动条
+                for i, slider in enumerate(self.sliders):
+                    # 检查把手区域
+                    handle_x = slider["rect"].x + int(slider["rect"].width *
+                                                      ((slider["value"] - slider["min"]) /
+                                                       (slider["max"] - slider["min"]))) - 8
+                    handle_y = slider["rect"].y - 12
+                    handle_rect = pygame.Rect(handle_x, handle_y, 16, 32)
+
+                    if handle_rect.collidepoint(event.pos):
+                        self.dragging = i
+                        break
+
+                    # 如果点击了滑动条而不是把手，直接移动把手到点击位置
+                    if slider["rect"].collidepoint(event.pos):
+                        ratio = (event.pos[0] - slider["rect"].x) / slider["rect"].width
+                        value = slider["min"] + ratio * (slider["max"] - slider["min"])
+                        # 按步长取整
+                        step = slider.get("step", 1)
+                        slider["value"] = int(round(value / step) * step)
+                        # 确保值在范围内
+                        slider["value"] = max(slider["min"], min(slider["max"], slider["value"]))
+                        self.dragging = i
+                        break
+
+                # 检查按钮
+                if self.back_button['rect'].collidepoint(event.pos):
+                    self.back_button['active'] = True
+                    return "menu"
+
+                if self.apply_button['rect'].collidepoint(event.pos):
+                    self.apply_button['active'] = True
+
+                    # 更新配置
+                    global CONFIG, MONSTER_DISTANCE, N, M
+
+                    # 地图设置
+                    CONFIG["MAP_WIDTH"] = self.sliders[0]["value"]
+                    CONFIG["MAP_HEIGHT"] = self.sliders[1]["value"]
+                    CONFIG["TILE_SIZE"] = self.sliders[2]["value"]
+                    CONFIG["SCREEN_WIDTH"] = CONFIG["MAP_WIDTH"] * CONFIG["TILE_SIZE"] + 2 * SIDEBAR_WIDTH
+                    CONFIG["SCREEN_HEIGHT"] = CONFIG["MAP_HEIGHT"] * CONFIG["TILE_SIZE"]
+
+                    # 游戏难度设置
+                    MONSTER_DISTANCE = self.sliders[3]["value"]
+                    N = self.sliders[4]["value"]
+                    M = self.sliders[5]["value"]
+
+                    return "apply"
 
         elif event.type == pygame.MOUSEBUTTONUP:
             self.dragging = None
+            self.back_button['active'] = False
+            self.apply_button['active'] = False
 
         elif event.type == pygame.MOUSEMOTION and self.dragging is not None:
             slider = self.sliders[self.dragging]
-            x = min(max(event.pos[0], slider["rect"].x), slider["rect"].x + slider["rect"].width)
-            ratio = (x - slider["rect"].x) / slider["rect"].width
-            slider["value"] = int(slider["min"] + ratio * (slider["max"] - slider["min"]))
+            # 计算新值
+            ratio = (event.pos[0] - slider["rect"].x) / slider["rect"].width
+            value = slider["min"] + ratio * (slider["max"] - slider["min"])
+            # 按步长取整
+            step = slider.get("step", 1)
+            slider["value"] = int(round(value / step) * step)
+            # 确保值在范围内
+            slider["value"] = max(slider["min"], min(slider["max"], slider["value"]))
 
         return "settings"
 
+    def run(self):
+        """运行设置菜单循环"""
+        clock = pygame.time.Clock()
+        running = True
 
-class DungeonButton:
-    def __init__(self, rect, text, font_size=32):
-        self.rect = rect
-        self.text = text
-        self.font = pygame.font.Font(None, font_size)
-        self.hover = False
-        self.flame_offset = 0  # 火焰动画偏移量
+        while running:
+            dt = clock.tick(60) / 1000  # 帧时间（秒）
 
-    def draw(self, surface):
-        # 动态更新火焰偏移
-        self.flame_offset = (self.flame_offset + 2) % 20
+            # 更新状态
+            self.update(dt)
 
-        # 基础石板
-        self._draw_stone_base(surface)
+            # 处理事件
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
 
-        # 金属镶边
-        self._draw_metal_trim(surface)
+                result = self.handle_event(event)
+                if result != "settings":
+                    return result
 
-        # 动态火焰效果（仅悬停时）
-        if self.hover:
-            self._draw_flame_effect(surface)
-
-        # 按钮文字
-        self._draw_text(surface)
-
-    def _draw_stone_base(self, surface):
-        # 石板基底
-        base_color = (60, 60, 60) if not self.hover else (80, 80, 80)
-        pygame.draw.rect(surface, base_color, self.rect, border_radius=8)
-
-        # 石头纹理
-        for _ in range(40):  # 随机石纹斑点
-            x = self.rect.x + random.randint(2, self.rect.w - 4)
-            y = self.rect.y + random.randint(2, self.rect.h - 4)
-            size = random.choice([1, 1, 1, 2])
-            color = random.choice([(70, 70, 70), (50, 50, 50), (90, 90, 90)])
-            pygame.draw.circle(surface, color, (x, y), size)
-
-        # 立体凹痕
-        pygame.draw.line(surface, (40, 40, 40),
-                         (self.rect.left + 5, self.rect.centery),
-                         (self.rect.right - 5, self.rect.centery), 3)
-        pygame.draw.line(surface, (40, 40, 40),
-                         (self.rect.centerx, self.rect.top + 5),
-                         (self.rect.centerx, self.rect.bottom - 5), 3)
-
-    def _draw_metal_trim(self, surface):
-        # 青铜镶边
-        trim_color1 = (198, 155, 93)  # 青铜色
-        trim_color2 = (150, 120, 70)  # 暗部
-        border_rect = self.rect.inflate(-4, -4)
-
-        # 渐变金属效果
-        for i in range(4):
-            color = (
-                trim_color1[0] + (trim_color2[0] - trim_color1[0]) * i / 4,
-                trim_color1[1] + (trim_color2[1] - trim_color1[1]) * i / 4,
-                trim_color1[2] + (trim_color2[2] - trim_color1[2]) * i / 4
-            )
-            pygame.draw.rect(surface, color, border_rect.inflate(-i * 2, -i * 2),
-                             border_radius=8 - i, width=2)
-
-        # 铆钉装饰
-        for x in [border_rect.left + 8, border_rect.right - 8]:
-            for y in [border_rect.top + 8, border_rect.bottom - 8]:
-                pygame.draw.circle(surface, (250, 250, 200), (x, y), 3)
-                pygame.draw.circle(surface, (150, 150, 100), (x, y), 3, 1)
-
-    def _draw_flame_effect(self, surface):
-        # 火焰粒子效果
-        for i in range(3):
-            offset = self.flame_offset + i * 7
-            if offset > 20: continue
-
-            # 火焰主体
-            flame_rect = pygame.Rect(
-                self.rect.centerx - 15 + offset,
-                self.rect.top - 15,
-                30, 30
-            )
-
-            # 火焰颜色渐变
-            for j, color in enumerate([(255, 100, 0, 150), (255, 200, 0, 80), (255, 255, 200, 40)]):
-                temp_surf = pygame.Surface((30, 30), pygame.SRCALPHA)
-                pygame.draw.ellipse(temp_surf, color, (0, j * 5, 30, 30 - j * 10))
-                surface.blit(temp_surf, flame_rect)
-
-            # 火星粒子
-            for _ in range(5):
-                x = flame_rect.centerx + random.randint(-8, 8)
-                y = flame_rect.centery + random.randint(-5, 5)
-                pygame.draw.circle(surface, (255, 255, 200, 150), (x, y), 1)
-
-    def _draw_text(self, surface):
-        # 文字阴影效果
-        text_surf = self.font.render(self.text, True, (30, 30, 30))
-        shadow_rect = text_surf.get_rect(center=(self.rect.centerx + 2, self.rect.centery + 2))
-        surface.blit(text_surf, shadow_rect)
-
-        # 主文字
-        text_color = (200, 160, 60) if not self.hover else (255, 200, 100)
-        text_surf = self.font.render(self.text, True, text_color)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        surface.blit(text_surf, text_rect)
+            # 绘制界面
+            self.draw()
 
 
 class MainMenu:
     def __init__(self, screen):
         self.screen = screen
-        self.font_title = pygame.font.Font(None, 72)  # 使用默认字体
-        self.background = self.create_stone_texture()
-        self.torch_frames = self.create_torch_frames()  # 动态生成火炬动画帧
-        self.torch_index = 0
+        self.screen_width, self.screen_height = screen.get_size()
+
+        # 字体设置 - 使用系统字体以支持中文
+        try:
+            # 尝试使用系统中文字体
+            self.font_title = pygame.font.SysFont("SimHei", 80, bold=True)  # 使用黑体
+            self.font_button = pygame.font.SysFont("SimHei", 36)            # 同样使用黑体
+        except:
+            # 如果找不到中文字体，回退到默认字体
+            self.font_title = pygame.font.Font(None, 80)
+            self.font_button = pygame.font.Font(None, 36)
+            print("警告: 未能加载中文字体，将使用默认字体")
+
+        # 加载/创建资源
+        self.background = self.create_stone_background()
+        self.torch_animation = self.create_torch_animation()
+        self.torch_frame_index = 0
         self.torch_timer = 0
 
-        # 使用 DungeonButton 创建按钮
-        self.start_button = DungeonButton(
-            pygame.Rect(0, 0, 300, 80), "Enter the Dungeon", 36
-        )
-        self.start_button.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT * 2 // 3)
+        # 标题位置和效果
+        self.title_pos = (self.screen_width // 2, self.screen_height // 4)
+        self.title_glow = 0
+        self.title_glow_dir = 1
 
-        self.settings_button = DungeonButton(
-            pygame.Rect(0, 0, 280, 70), "Settings", 32
-        )
-        self.settings_button.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT * 3 // 4)
+        # 按钮设置
+        button_width, button_height = 300, 80
 
-    # --------绘制火炬 -------
-    def create_torch_frames(self):
-        torch_width = 4 * TILE_SIZE  # 3格宽
-        torch_height = 8 * TILE_SIZE  # 6格高
-        frames = []
+        # 开始游戏按钮
+        self.start_button = {
+            'rect': pygame.Rect(0, 0, button_width, button_height),
+            'text': "进入地牢",
+            'hover': False,
+            'active': False,
+            'particles': []
+        }
+        self.start_button['rect'].center = (self.screen_width // 2, self.screen_height * 3 // 5)
 
-        for i in range(8):  # 8帧动画
-            frame = pygame.Surface((torch_width, torch_height), pygame.SRCALPHA)
+        # 设置按钮
+        self.settings_button = {
+            'rect': pygame.Rect(0, 0, button_width - 40, button_height - 10),
+            'text': "设置",
+            'hover': False,
+            'active': False,
+            'particles': []
+        }
+        self.settings_button['rect'].center = (self.screen_width // 2, self.screen_height * 3 // 5 + button_height + 20)
 
-            # ------ 火焰核心 -------
-            # 动态火焰形状参数
-            flame_radius = 30 + i * 5  # 火焰半径动态变化
-            flame_points = []
-            for angle in range(0, 360, 10):
-                # 动态扭曲效果
-                distortion = math.sin(math.radians(angle * 2 + i * 45)) * 10
-                x = torch_width // 2 + math.cos(math.radians(angle)) * (flame_radius + distortion)
-                y = torch_height - 50 - angle / 3  # 火焰向上延伸
-                flame_points.append((x, y))
+        # 装饰元素
+        self.decorations = self.generate_decorations()
 
-            # 多层火焰（从内到外）
-            flame_layers = [
-                {'color': (255, 200, 50, 200), 'offset': 0},  # 核心亮黄色
-                {'color': (255, 100, 0, 150), 'offset': 5},  # 中层橙色
-                {'color': (200, 50, 0, 100), 'offset': 10},  # 外围深红色
-                {'color': (100, 20, 0, 50), 'offset': 15}  # 边缘暗红色
-            ]
+        # 动画计时器
+        self.animation_time = 0
 
-            for layer in flame_layers:
-                offset_points = [(x + random.randint(-2, 2), y + layer['offset'] + random.randint(-2, 2))
-                                 for x, y in flame_points]
-                pygame.draw.polygon(frame, layer['color'], offset_points)
+    def create_stone_background(self):
+        texture = pygame.Surface((self.screen_width, self.screen_height))
 
-            # ------ 火星粒子系统 -------
-            for _ in range(20):  # 增加粒子数量
-                life = random.randint(0, 3)
-                if life > 0:
-                    alpha = 200 - life * 50
-                    # 粒子起始位置在火焰底部
-                    start_x = torch_width // 2 + random.randint(-15, 15)
-                    start_y = torch_height - 50 - life * 5 + i * 3  # 粒子向上运动
-                    # 粒子拖影效果
-                    end_x = start_x + random.randint(-4, 4)
-                    end_y = start_y + random.randint(-4, 4)
-                    pygame.draw.line(frame, (255, 150, 50, alpha),
-                                     (start_x, start_y), (end_x, end_y), 2)
+        # 渐变背景 - 从深色到稍微亮一点
+        for y in range(self.screen_height):
+            # 计算渐变颜色
+            gradient_val = 25 + int(20 * (y / self.screen_height))
+            color = (gradient_val, gradient_val, gradient_val + 10)
+            pygame.draw.line(texture, color, (0, y), (self.screen_width, y))
 
-            # ------ 光晕效果 -------
-            glow = pygame.Surface((torch_width, torch_height), pygame.SRCALPHA)
-            radius = 25 + i * 2  # 动态光晕半径
-            for r in range(radius, 0, -2):
-                alpha = max(0, 30 - r)  # 透明度递减
-                glow_color = (255, 200, 100, alpha)
-                temp_surface = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-                pygame.draw.circle(temp_surface, glow_color, (r, r), r)
-                glow.blit(temp_surface, (torch_width // 2 - r, torch_height - 50 - r))
+        # 添加噪点纹理
+        for _ in range(8000):
+            x = random.randint(0, self.screen_width - 1)
+            y = random.randint(0, self.screen_height - 1)
+            brightness = random.randint(-15, 15)
+            size = random.randint(1, 3)
 
-            frame.blit(glow, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+            # 获取当前像素颜色并调整
+            pixel_color = texture.get_at((x, y))
+            adjusted_color = (
+                max(0, min(255, pixel_color[0] + brightness)),
+                max(0, min(255, pixel_color[1] + brightness)),
+                max(0, min(255, pixel_color[2] + brightness))
+            )
 
-            # ------ 随机闪烁亮点 -------
-            for _ in range(3):
-                x = torch_width // 2 + random.randint(-15, 15)
-                y = torch_height - random.randint(50, 80)
-                pygame.draw.circle(frame, (255, 255, 200, 100),
-                                   (x, y), random.randint(2, 4))
+            pygame.draw.circle(texture, adjusted_color, (x, y), size)
 
-            # ------ 火炬金属支架 -------
-            # 垂直支架
-            pygame.draw.rect(frame, (80, 80, 80),
-                             (torch_width // 2 - 5, torch_height - 50, 10, 50))
-            # 支架底座
-            pygame.draw.polygon(frame, (100, 100, 100), [
-                (torch_width // 2 - 15, torch_height - 40),
-                (torch_width // 2 + 15, torch_height - 40),
-                (torch_width // 2 + 20, torch_height - 30),
-                (torch_width // 2 - 20, torch_height - 30)
-            ])
-            # 支架装饰
-            for j in range(3):
-                pygame.draw.circle(frame, (120, 120, 120),
-                                   (torch_width // 2, torch_height - 50 + j * 15), 3)
+        # 添加石块纹理
+        for _ in range(100):
+            x = random.randint(0, self.screen_width - 20)
+            y = random.randint(0, self.screen_height - 20)
+            width = random.randint(50, 150)
+            height = random.randint(50, 150)
+            brightness = random.randint(-10, 10)
 
-            frames.append(frame)
-        return frames
+            stone_rect = pygame.Rect(x, y, width, height)
+            # 使用带SRCALPHA标志的Surface创建透明度
+            overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+            overlay_color = (brightness + 128, brightness + 128, brightness + 128, 30)
+            overlay.fill(overlay_color)
+            texture.blit(overlay, (x, y))
 
-    def create_stone_texture(self):
-        texture = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-        # 绘制石头纹理
-        for i in range(0, SCREEN_WIDTH, 20):
-            for j in range(0, SCREEN_HEIGHT, 20):
-                color = random.choice([(80, 80, 80), (70, 70, 70), (90, 90, 90)])
-                pygame.draw.rect(texture, color, (i, j, 20, 20), border_radius=3)
-                # 添加苔藓斑点
-                if random.random() < 0.1:
-                    pygame.draw.circle(texture, COLOR_MOSS,
-                                       (i + random.randint(2, 18), j + random.randint(2, 18)),
-                                       random.randint(2, 4))
+            # 石块边缘
+            pygame.draw.rect(texture, (40, 40, 50), stone_rect, 2)
+
+        # 添加苔藓斑点
+        for _ in range(50):
+            x = random.randint(0, self.screen_width - 20)
+            y = random.randint(0, self.screen_height - 20)
+            size = random.randint(5, 15)
+            alpha = random.randint(30, 100)
+
+            # 创建带透明度的苔藓
+            moss_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+            moss_color = (34, 139, 34, alpha)  # RGBA格式
+            pygame.draw.circle(moss_surf, moss_color, (size, size), size)
+            texture.blit(moss_surf, (x, y))
+
         return texture
 
-    def draw(self):
-        # 绘制背景纹理
-        self.screen.blit(self.background, (0, 0))
+    def create_torch_animation(self):
+        frames = []
+        frame_count = 8
+        torch_width, torch_height = 120, 180  # 增加尺寸以获得更好的细节
+
+        for i in range(frame_count):
+            frame = pygame.Surface((torch_width, torch_height), pygame.SRCALPHA)
+
+            # 火把支架 - 金属杆
+            pygame.draw.rect(frame, (80, 80, 80),
+                             (torch_width // 2 - 5, torch_height - 60, 10, 50))
+
+            # 支架底座
+            pygame.draw.rect(frame, (100, 100, 100),
+                             (torch_width // 2 - 15, torch_height - 25, 30, 15),
+                             border_radius=5)
+
+            # 装饰环
+            pygame.draw.circle(frame, (120, 120, 120),
+                               (torch_width // 2, torch_height - 60), 7)
+            pygame.draw.circle(frame, (0, 0, 0),
+                               (torch_width // 2, torch_height - 60), 7, 1)
+
+            # 火把头 - 缠绕的布
+            pygame.draw.ellipse(frame, (139, 69, 19),
+                                (torch_width // 2 - 12, torch_height - 90, 24, 30))
+
+            # 随机布纹理
+            for _ in range(5):
+                x = torch_width // 2 - 10 + random.randint(0, 20)
+                y = torch_height - 90 + random.randint(0, 30)
+                pygame.draw.line(frame, (101, 67, 33),
+                                 (x, y), (x + random.randint(-5, 5), y + random.randint(-5, 5)),
+                                 random.randint(1, 2))
+
+            # 动态火焰 - 核心
+            flame_x = torch_width // 2
+            flame_y = torch_height - 95
+
+            # 基础火焰形状 - 由多个叠加的椭圆组成
+            # 火焰高度根据帧数变化
+            flame_height_mod = math.sin(i * math.pi / 4) * 10
+
+            # 外层火焰（红色）
+            pygame.draw.ellipse(frame, (255, 69, 0, 200),
+                                (flame_x - 20, flame_y - 60 - flame_height_mod,
+                                 40, 60 + flame_height_mod))
+
+            # 中层火焰（橙色）
+            pygame.draw.ellipse(frame, (255, 140, 0, 220),
+                                (flame_x - 15, flame_y - 50 - flame_height_mod,
+                                 30, 50 + flame_height_mod))
+
+            # 内层火焰（黄色）
+            pygame.draw.ellipse(frame, (255, 215, 0, 240),
+                                (flame_x - 10, flame_y - 40 - flame_height_mod,
+                                 20, 40 + flame_height_mod))
+
+            # 最内层火焰（白色）
+            pygame.draw.ellipse(frame, (255, 255, 200, 250),
+                                (flame_x - 5, flame_y - 25 - flame_height_mod,
+                                 10, 25 + flame_height_mod))
+
+            # 添加动态火花
+            for _ in range(8):
+                spark_x = flame_x + random.randint(-15, 15)
+                spark_y = flame_y - random.randint(20, 60)
+                spark_size = random.randint(1, 3)
+
+                # 随机火花颜色
+                spark_color = random.choice([
+                    (255, 255, 200, 200),  # 白色
+                    (255, 215, 0, 200),  # 黄色
+                    (255, 140, 0, 200)  # 橙色
+                ])
+
+                pygame.draw.circle(frame, spark_color, (spark_x, spark_y), spark_size)
+
+            # 添加火焰光晕效果
+            glow_surf = pygame.Surface((torch_width, torch_height), pygame.SRCALPHA)
+            glow_radius = 60 + int(flame_height_mod)
+            for r in range(glow_radius, 0, -10):
+                alpha = max(0, 50 - r // 2)
+                glow_color = (255, 140, 0, alpha)
+                pygame.draw.circle(glow_surf, glow_color,
+                                   (flame_x, flame_y - 30), r)
+
+            frame.blit(glow_surf, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+
+            frames.append(frame)
+
+        return frames
+
+    def generate_decorations(self):
+        """生成各种装饰元素"""
+        decorations = []
+
+        # 随机添加一些环境装饰
+        for _ in range(12):
+            x = random.randint(0, self.screen_width)
+            y = random.randint(0, self.screen_height)
+            size = random.randint(3, 8)
+            speed = random.uniform(0.2, 1.0)
+
+            decorations.append({
+                'type': 'dust',
+                'pos': [x, y],
+                'size': size,
+                'speed': speed,
+                'alpha': random.randint(20, 100)
+            })
+
+        # 添加装饰性的石墙挂饰
+        for i in range(3):
+            x = random.randint(100, self.screen_width - 100)
+            y = random.randint(50, self.screen_height // 3)
+
+            decorations.append({
+                'type': 'wall_ornament',
+                'pos': [x, y],
+                'size': random.randint(30, 60),
+                'style': random.choice(['shield', 'sword', 'banner'])
+            })
+
+        # 挂在墙上的锁链
+        for i in range(4):
+            x = random.randint(50, self.screen_width - 50)
+            y = random.randint(20, 80)
+            length = random.randint(100, 200)
+
+            decorations.append({
+                'type': 'chain',
+                'pos': [x, y],
+                'length': length,
+                'segments': random.randint(5, 10)
+            })
+
+        return decorations
+
+    def update_decorations(self, dt):
+        """更新装饰元素的状态"""
+        # 更新灰尘粒子
+        for dec in self.decorations:
+            if dec['type'] == 'dust':
+                # 移动灰尘
+                dec['pos'][1] += dec['speed'] * dt * 60
+
+                # 如果灰尘离开屏幕，重置到顶部
+                if dec['pos'][1] > self.screen_height:
+                    dec['pos'][1] = 0
+                    dec['pos'][0] = random.randint(0, self.screen_width)
+                    dec['alpha'] = random.randint(20, 100)
+
+    def update_button_particles(self, dt):
+        """更新按钮粒子效果"""
+
+        def update_button_particles_for_button(button):
+            # 如果按钮被悬停，添加新粒子
+            if button['hover']:
+                if random.random() < 0.7:
+                    # 从按钮边缘随机位置生成粒子
+                    side = random.randint(0, 3)  # 0=top, 1=right, 2=bottom, 3=left
+                    if side == 0:
+                        pos = [button['rect'].left + random.random() * button['rect'].width,
+                               button['rect'].top]
+                    elif side == 1:
+                        pos = [button['rect'].right,
+                               button['rect'].top + random.random() * button['rect'].height]
+                    elif side == 2:
+                        pos = [button['rect'].left + random.random() * button['rect'].width,
+                               button['rect'].bottom]
+                    else:
+                        pos = [button['rect'].left,
+                               button['rect'].top + random.random() * button['rect'].height]
+
+                    # 粒子基础属性
+                    particle = {
+                        'pos': pos,
+                        'vel': [random.uniform(-1, 1), random.uniform(-1, 1)],
+                        'size': random.uniform(1, 3),
+                        'life': random.uniform(0.5, 2),
+                        'max_life': 2,
+                        'color': random.choice([(255, 215, 0), (255, 165, 0), (255, 140, 0)])
+                    }
+                    button['particles'].append(particle)
+
+            # 更新现有粒子
+            for p in button['particles'][:]:
+                p['pos'][0] += p['vel'][0] * dt * 60
+                p['pos'][1] += p['vel'][1] * dt * 60
+                p['life'] -= dt
+
+                # 移除死亡粒子
+                if p['life'] <= 0:
+                    button['particles'].remove(p)
+
+        # 更新每个按钮的粒子
+        update_button_particles_for_button(self.start_button)
+        update_button_particles_for_button(self.settings_button)
+
+    def draw_decorations(self):
+        """绘制装饰元素"""
+        for dec in self.decorations:
+            if dec['type'] == 'dust':
+                # 绘制灰尘粒子 - 使用Surface而非直接绘制带Alpha的颜色
+                dust_surf = pygame.Surface((dec['size'] * 2, dec['size'] * 2), pygame.SRCALPHA)
+                dust_color = (200, 200, 200, dec['alpha'])
+                pygame.draw.circle(dust_surf, dust_color,
+                                   (dec['size'], dec['size']),
+                                   dec['size'])
+                self.screen.blit(dust_surf,
+                                 (int(dec['pos'][0] - dec['size']),
+                                  int(dec['pos'][1] - dec['size'])))
+
+            elif dec['type'] == 'wall_ornament':
+                # 绘制墙上装饰
+                if dec['style'] == 'shield':
+                    # 盾牌
+                    pygame.draw.ellipse(self.screen, (100, 100, 120),
+                                        (dec['pos'][0] - dec['size'] // 2,
+                                         dec['pos'][1] - dec['size'] // 2,
+                                         dec['size'], dec['size'] * 1.2))
+                    pygame.draw.ellipse(self.screen, (60, 60, 80),
+                                        (dec['pos'][0] - dec['size'] // 2,
+                                         dec['pos'][1] - dec['size'] // 2,
+                                         dec['size'], dec['size'] * 1.2), 2)
+
+                    # 盾牌中央图案
+                    pygame.draw.rect(self.screen, (150, 120, 50),
+                                     (dec['pos'][0] - dec['size'] // 4,
+                                      dec['pos'][1] - dec['size'] // 4,
+                                      dec['size'] // 2, dec['size'] // 2))
+
+                elif dec['style'] == 'sword':
+                    # 剑 - 简化版本
+                    # 剑身
+                    pygame.draw.rect(self.screen, (200, 200, 200),
+                                     (dec['pos'][0] - 2,
+                                      dec['pos'][1] - dec['size'] // 2,
+                                      4, dec['size']))
+                    # 剑柄
+                    pygame.draw.rect(self.screen, (139, 69, 19),
+                                     (dec['pos'][0] - 6,
+                                      dec['pos'][1] + dec['size'] // 2 - 10,
+                                      12, 15))
+                    # 剑格
+                    pygame.draw.rect(self.screen, (180, 150, 50),
+                                     (dec['pos'][0] - 10,
+                                      dec['pos'][1] + dec['size'] // 2 - 12,
+                                      20, 5))
+
+                elif dec['style'] == 'banner':
+                    # 旗帜
+                    banner_color = random.choice([(180, 0, 0), (0, 80, 180), (80, 120, 0)])
+                    pygame.draw.rect(self.screen, banner_color,
+                                     (dec['pos'][0] - dec['size'] // 2,
+                                      dec['pos'][1],
+                                      dec['size'], dec['size'] * 1.5))
+                    # 旗杆
+                    pygame.draw.rect(self.screen, (100, 80, 60),
+                                     (dec['pos'][0] - dec['size'] // 2 - 4,
+                                      dec['pos'][1] - 20,
+                                      4, dec['size'] * 1.5 + 30))
+                    # 装饰纹章
+                    pygame.draw.circle(self.screen, (220, 220, 220),
+                                       (dec['pos'][0], dec['pos'][1] + dec['size'] // 2),
+                                       dec['size'] // 5)
+
+            elif dec['type'] == 'chain':
+                # 绘制锁链
+                for i in range(dec['segments']):
+                    segment_length = dec['length'] / dec['segments']
+                    chain_x = dec['pos'][0]
+                    chain_y = dec['pos'][1] + i * segment_length
+
+                    # 左右偏移，创造自然晃动效果
+                    offset_x = math.sin(self.animation_time / 500 + i * 0.5) * 5
+
+                    # 锁链环
+                    pygame.draw.ellipse(self.screen, (100, 100, 100),
+                                        (chain_x - 7 + offset_x, chain_y, 14, segment_length * 0.9))
+                    pygame.draw.ellipse(self.screen, (50, 50, 50),
+                                        (chain_x - 7 + offset_x, chain_y, 14, segment_length * 0.9), 2)
+
+    def draw_button(self, button):
+        """绘制精美的按钮"""
+        rect = button['rect']
+        hover = button['hover']
+
+        # 绘制基本按钮
+        base_color = (80, 80, 100) if hover else (60, 60, 80)
+        pygame.draw.rect(self.screen, base_color, rect, border_radius=12)
+
+        # 3D效果阴影
+        highlight_rect = rect.inflate(-6, -6)
+        pygame.draw.rect(self.screen, (100, 100, 120) if hover else (80, 80, 100),
+                         highlight_rect, border_radius=10)
+
+        # 金色边框
+        border_color = (200, 170, 60) if hover else (150, 120, 40)
+        pygame.draw.rect(self.screen, border_color, rect, 2, border_radius=12)
+
+        # 内部装饰图案 - 角落装饰
+        corner_size = 8
+        corner_color = (200, 170, 60) if hover else (150, 120, 40)
+
+        # 左上角
+        pygame.draw.line(self.screen, corner_color,
+                         (rect.left + 5, rect.top + 5),
+                         (rect.left + 5 + corner_size, rect.top + 5), 2)
+        pygame.draw.line(self.screen, corner_color,
+                         (rect.left + 5, rect.top + 5),
+                         (rect.left + 5, rect.top + 5 + corner_size), 2)
+
+        # 右上角
+        pygame.draw.line(self.screen, corner_color,
+                         (rect.right - 5, rect.top + 5),
+                         (rect.right - 5 - corner_size, rect.top + 5), 2)
+        pygame.draw.line(self.screen, corner_color,
+                         (rect.right - 5, rect.top + 5),
+                         (rect.right - 5, rect.top + 5 + corner_size), 2)
+
+        # 左下角
+        pygame.draw.line(self.screen, corner_color,
+                         (rect.left + 5, rect.bottom - 5),
+                         (rect.left + 5 + corner_size, rect.bottom - 5), 2)
+        pygame.draw.line(self.screen, corner_color,
+                         (rect.left + 5, rect.bottom - 5),
+                         (rect.left + 5, rect.bottom - 5 - corner_size), 2)
+
+        # 右下角
+        pygame.draw.line(self.screen, corner_color,
+                         (rect.right - 5, rect.bottom - 5),
+                         (rect.right - 5 - corner_size, rect.bottom - 5), 2)
+        pygame.draw.line(self.screen, corner_color,
+                         (rect.right - 5, rect.bottom - 5),
+                         (rect.right - 5, rect.bottom - 5 - corner_size), 2)
+
+        # 绘制文字
+        text_color = (255, 220, 100) if hover else (220, 180, 60)
+        text_surf = self.font_button.render(button['text'], True, text_color)
+        text_rect = text_surf.get_rect(center=rect.center)
+
+        # 如果按钮被激活，文字略微下移以增加按压感
+        if button['active']:
+            text_rect.y += 2
+
+        self.screen.blit(text_surf, text_rect)
+
+        # 绘制粒子效果
+        for p in button['particles']:
+            alpha = int(255 * (p['life'] / p['max_life']))
+            size = p['size'] * (p['life'] / p['max_life'])
+
+            # 绘制粒子
+            particle_surf = pygame.Surface((int(size * 2), int(size * 2)), pygame.SRCALPHA)
+            particle_color = (*p['color'], alpha)
+            pygame.draw.circle(particle_surf, particle_color,
+                               (int(size), int(size)), int(size))
+
+            self.screen.blit(particle_surf,
+                             (int(p['pos'][0] - size), int(p['pos'][1] - size)))
+
+    def draw_title(self):
+        # 动态更新标题光晕
+        self.title_glow += 0.02 * self.title_glow_dir
+        if self.title_glow >= 1.0:
+            self.title_glow = 1.0
+            self.title_glow_dir = -1
+        elif self.title_glow <= 0.0:
+            self.title_glow = 0.0
+            self.title_glow_dir = 1
+
+        # 计算光晕颜色
+        glow_alpha = int(50 + 100 * self.title_glow)
+        glow_size = int(10 + 20 * self.title_glow)
+
+        # 渲染主标题文本
+        title_text = "魔塔地牢"
+
+        # 标题阴影
+        shadow_surf = self.font_title.render(title_text, True, (0, 0, 0))
+        shadow_rect = shadow_surf.get_rect(center=(self.title_pos[0] + 3, self.title_pos[1] + 3))
+        self.screen.blit(shadow_surf, shadow_rect)
+
+        # 主标题
+        title_surf = self.font_title.render(title_text, True, (220, 180, 60))
+        title_rect = title_surf.get_rect(center=self.title_pos)
+
+        # 底层光晕效果
+        if glow_alpha > 30:
+            glow_surf = pygame.Surface((title_rect.width + glow_size * 2,
+                                        title_rect.height + glow_size * 2), pygame.SRCALPHA)
+            for i in range(3):
+                # 确保glow_color是有效的RGBA值
+                glow_alpha_i = glow_alpha // (i + 1)
+                glow_color = (255, 200, 100, glow_alpha_i)
+                pygame.draw.rect(glow_surf, glow_color,
+                                 (glow_size - i * 3, glow_size - i * 3,
+                                  title_rect.width + i * 6, title_rect.height + i * 6),
+                                 border_radius=10)
+
+            self.screen.blit(glow_surf,
+                             (title_rect.left - glow_size, title_rect.top - glow_size))
 
         # 绘制标题
-        title_surf = self.font_title.render("Dungeon Tower", True, COLOR_UI_TEXT)
-        title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
         self.screen.blit(title_surf, title_rect)
 
-        # 按钮悬停状态
+        # 装饰线条
+        line_color = (220, 180, 60)
+        line_length = 200
+        pygame.draw.line(self.screen, line_color,
+                         (self.title_pos[0] - line_length, self.title_pos[1] + title_rect.height // 2),
+                         (self.title_pos[0] - 20, self.title_pos[1] + title_rect.height // 2), 2)
+        pygame.draw.line(self.screen, line_color,
+                         (self.title_pos[0] + 20, self.title_pos[1] + title_rect.height // 2),
+                         (self.title_pos[0] + line_length, self.title_pos[1] + title_rect.height // 2), 2)
+
+        # 装饰图案
+        ornament_radius = 10
+        pygame.draw.circle(self.screen, line_color,
+                           (self.title_pos[0] - line_length - ornament_radius,
+                            self.title_pos[1] + title_rect.height // 2),
+                           ornament_radius)
+        pygame.draw.circle(self.screen, line_color,
+                           (self.title_pos[0] + line_length + ornament_radius,
+                            self.title_pos[1] + title_rect.height // 2),
+                           ornament_radius)
+
+    def update(self, dt):
+        """更新菜单的各种动画和状态"""
+        # 更新动画计时
+        self.animation_time += dt * 1000  # 毫秒
+
+        # 更新火把动画
+        self.torch_timer += dt
+        if self.torch_timer >= 0.1:  # 每0.1秒更新一帧
+            self.torch_timer = 0
+            self.torch_frame_index = (self.torch_frame_index + 1) % len(self.torch_animation)
+
+        # 更新按钮效果
         mouse_pos = pygame.mouse.get_pos()
-        self.start_button.hover = self.start_button.rect.collidepoint(mouse_pos)
-        self.settings_button.hover = self.settings_button.rect.collidepoint(mouse_pos)
+
+        # 更新开始按钮状态
+        self.start_button['hover'] = self.start_button['rect'].collidepoint(mouse_pos)
+
+        # 更新设置按钮状态
+        self.settings_button['hover'] = self.settings_button['rect'].collidepoint(mouse_pos)
+
+        # 更新按钮粒子
+        self.update_button_particles(dt)
+
+        # 更新装饰元素
+        self.update_decorations(dt)
+
+    def draw(self):
+        """绘制整个菜单界面"""
+        # 绘制背景
+        self.screen.blit(self.background, (0, 0))
+
+        # 绘制装饰
+        self.draw_decorations()
+
+        # 绘制火把
+        torch_frame = self.torch_animation[self.torch_frame_index]
+
+        # 左侧火把
+        left_torch_x = self.title_pos[0] - 250
+        left_torch_y = self.title_pos[1] - torch_frame.get_height() // 2
+        self.screen.blit(torch_frame, (left_torch_x, left_torch_y))
+
+        # 右侧火把（水平翻转）
+        right_torch_x = self.title_pos[0] + 250 - torch_frame.get_width()
+        right_torch_y = self.title_pos[1] - torch_frame.get_height() // 2
+        flipped_torch = pygame.transform.flip(torch_frame, True, False)
+        self.screen.blit(flipped_torch, (right_torch_x, right_torch_y))
+
+        # 绘制标题
+        self.draw_title()
 
         # 绘制按钮
-        self.start_button.draw(self.screen)
-        self.settings_button.draw(self.screen)
-
-        # 计算火炬位置
-        torch_spacing = 50  # 标题与火炬间距
-
-        # 左侧火炬
-        torch_left_x = title_rect.left - torch_spacing - 3 * TILE_SIZE
-        torch_left_y = title_rect.centery - 3 * TILE_SIZE  # 垂直居中
-
-        # 右侧火炬
-        torch_right_x = title_rect.right + torch_spacing
-
-        # 绘制动态火炬
-        self.torch_timer += 1
-        if self.torch_timer >= 5:  # 加快动画速度
-            self.torch_index = (self.torch_index + 1) % 8
-            self.torch_timer = 0
-
-        # 左侧火炬
-        self.screen.blit(self.torch_frames[self.torch_index],
-                         (torch_left_x, torch_left_y))
-
-        # 右侧火炬（镜像）
-        flipped_torch = pygame.transform.flip(self.torch_frames[self.torch_index], True, False)
-        self.screen.blit(flipped_torch,
-                         (torch_right_x, torch_left_y))
-
-        # 添加标题装饰
-        pygame.draw.line(self.screen, COLOR_UI_TEXT,
-                         (title_rect.left - 50, title_rect.centery),
-                         (title_rect.right + 50, title_rect.centery), 3)
+        self.draw_button(self.start_button)
+        self.draw_button(self.settings_button)
 
         # 返回按钮区域用于点击检测
-        return [self.start_button.rect, self.settings_button.rect]
+        return [self.start_button['rect'], self.settings_button['rect']]
 
 
 class DeathScreen:
@@ -747,7 +1543,7 @@ class Player:
         self.hp = 100000
         self.max_hp = 100000
         self.base_atk = 25  # 基础攻击力
-        self.base_defense = 25  # 基础防御力
+        self.base_defense = 25000  # 基础防御力
         self.base_attack_speed = 1.0  # 基础攻击速度
         self.base_attack_range = 1   # 基础攻击范围
         self.attack_cooldown = 0
@@ -755,40 +1551,69 @@ class Player:
         self.equipped_weapon = None  # 当前装备的武器
         self.equipped_armor = None  # 当前装备的护甲
         self.skills = {
-            'Q': {
-                'name': "火球术",
+            'FireStrikeEffect': {
+                'name': "火焰重击",
                 'cooldown': 5,
                 'current_cd': 0,
                 'range': 6,
                 'radius': 2,
                 'damage_multiple': 2.2,
-                'effect': FireStrikeEffect
+                'effect': FireStrikeEffect,
+                'key': pygame.K_f
             },
-            'E': {
+            'LightningEffect': {
                 'name': "闪电链",
-                'cooldown': 0.1,
+                'cooldown': 3,
                 'current_cd': 0,
                 'range': 8,
                 'max_targets': 3,
                 'damage_multiple': 1.8,
-                'effect': LightningEffect
+                'effect': LightningEffect,
+                'key': pygame.K_e
             },
-            'R': {
+            'HolyBallEffect': {
                 'name': "神圣球",
                 'cooldown': 8,
                 'current_cd': 0,
                 'seek_range': 10,
-                'ball_count': 12,
+                'ball_count': 6,
                 'damage_multiple': 2.5,
-                'effect': HollyBallEffect
+                'effect': HolyBallEffect,
+                'key': pygame.K_c
             },
-            'T': {
+            'TripleAttack': {
                 'name': "三连斩",
                 'cooldown': 6,
                 'current_cd': 0,
                 'range': 2,
                 'damage_multipliers': [0.8, 1.0, 1.5],  # 三连斩伤害系数
-                'effect': TripleAttack
+                'effect': TripleAttack,
+                'key': pygame.K_q
+            },
+            'SummonLightningBall': {
+                'name': "守护闪电球阵",
+                'cooldown': 30,  # 30秒冷却时间
+                'current_cd': 0,
+                'duration': 20,  # 闪电球存在15秒
+                'ball_count': 6,  # 召唤6个闪电球
+                'attack_range': 6,  # 攻击范围6格
+                'attack_speed': 1.0,  # 每秒攻击1次
+                'damage_multiple': 1.0,  # 伤害为玩家攻击力的1倍
+                'effect': SummonLightningBall,
+                'key': pygame.K_z
+            },
+            'SummonHolyBall': {
+                'name': "神圣光环",
+                'cooldown': 45,
+                'current_cd': 0,
+                'duration': 20,  # 20 seconds duration
+                'ball_count': 6,  # 6 holy balls
+                'attack_range': 6,  # 6 tiles attack range
+                'attack_speed': 0.8,  # 0.8 attacks per second
+                'damage_multiple': 1.2,  # 1.2x player's attack damage
+                'heal_percent': 0.05,  # Heal 5% of max HP per second
+                'effect': SummonHolyBall,
+                'key': pygame.K_x
             }
         }
 
@@ -840,6 +1665,19 @@ class Monster:
         self.coin = self.Num_Random_Control(floor, mdata["coin"])
         self.speed = mdata["speed"]  # 初始化移动速度
         self.move_counter = 0  # 用于控制移动频率的计数器
+
+        # 追踪系统新增属性
+        self.is_tracking = False  # 是否正在追踪玩家
+        self.tracking_timeout = 0  # 追踪超时计时器
+        self.tracking_duration = MONSTER_TRACKING_DURATION  # 追踪持续时间(秒)
+        self.path_to_player = []  # 存储到玩家的路径
+        self.path_update_cooldown = 0  # 路径更新冷却
+        self.path_update_rate = MONSTER_PATH_UPDATE_RATE  # 路径更新频率(秒)
+        self.wander_direction = None  # 非追踪状态下的随机移动方向
+        self.wander_steps = 0  # 随机移动剩余步数
+        self.last_pos = (x, y)  # 上一个位置，用于检测卡住
+        self.stuck_counter = 0  # 卡住计数器
+
         if "魔王" in self.name:
             self.skill_cd = 0  # 技能冷却计时器
             self.crack_cd = 10  # 地裂冷却
@@ -869,8 +1707,566 @@ class Monster:
         return math.ceil(
             x * (1 + 0.2 * random.randint(0, floor)) * (0.6 + 0.4 * floor) * (1 + S_MONSTER * random.random()))
 
+# ---------------- 游戏商店 ----------------------
+
+
+class DungeonShop:
+    def __init__(self, screen, player, floor):
+        """
+        初始化商店界面
+        :param screen: 游戏屏幕
+        :param player: 玩家对象
+        :param floor: 当前楼层
+        """
+        self.screen = screen
+        self.player = player
+        self.floor = floor
+
+        # 获取屏幕尺寸
+        self.screen_width, self.screen_height = screen.get_size()
+
+        # 商店窗口参数 - 调整窗口大小，为文字提供更多空间
+        self.window_width = 700
+        self.window_height = 530
+        self.window_x = (self.screen_width - self.window_width) // 2
+        self.window_y = (self.screen_height - self.window_height) // 2
+
+        # 字体和颜色 - 使用支持中文的字体
+        try:
+            # 尝试使用系统中文字体，调整字体大小
+            self.title_font = pygame.font.SysFont("SimHei", 40, bold=True)  # 黑体标题
+            self.item_font = pygame.font.SysFont("SimSun", 24)  # 宋体项目
+            self.info_font = pygame.font.SysFont("SimSun", 20)  # 宋体描述
+            self.price_font = pygame.font.SysFont("SimSun", 22, bold=True)  # 价格专用字体
+        except:
+            # 回退到默认字体
+            self.title_font = pygame.font.Font(None, 48)
+            self.item_font = pygame.font.Font(None, 32)
+            self.info_font = pygame.font.Font(None, 28)
+            self.price_font = pygame.font.Font(None, 30)
+
+            # 颜色定义
+        self.COLOR_BG = (30, 30, 40, 220)  # 增加不透明度
+        self.COLOR_BORDER = (70, 70, 100)
+        self.COLOR_TITLE = (255, 215, 0)  # 金色
+        self.COLOR_TEXT = (220, 220, 220)
+        self.COLOR_DESC = (180, 180, 200)  # 描述文字颜色
+        self.COLOR_HIGHLIGHT = (80, 80, 130)
+        self.COLOR_PRICE = (255, 165, 0)  # 橙色
+        self.COLOR_AFFORDABLE = (80, 220, 80)  # 绿色
+        self.COLOR_UNAFFORDABLE = (220, 80, 80)  # 红色
+        self.COLOR_SHINE = (255, 255, 200)
+        self.COLOR_BUTTON = (60, 60, 80)
+        self.COLOR_BUTTON_HOVER = (80, 80, 120)
+
+        # 商品项目列表
+        self.items = [
+            {
+                "name": f"生命药剂",
+                "description": f"恢复 {1000 * floor} 点生命值",
+                "price": 100 * floor,
+                "key": pygame.K_1,
+                "label": "1",
+                "icon": self._create_potion_icon((255, 0, 0)),  # 红色药水
+                "action": self._buy_small_hp
+            },
+            {
+                "name": f"力量宝石",
+                "description": f"永久提升 {5 * floor} 点攻击力",
+                "price": 100 * floor,
+                "key": pygame.K_2,
+                "label": "2",
+                "icon": self._create_gem_icon((255, 100, 100)),  # 红色宝石
+                "action": self._buy_small_atk
+            },
+            {
+                "name": f"护盾宝石",
+                "description": f"永久提升 {5 * floor} 点防御力",
+                "price": 100 * floor,
+                "key": pygame.K_3,
+                "label": "3",
+                "icon": self._create_gem_icon((100, 100, 255)),  # 蓝色宝石
+                "action": self._buy_small_def
+            },
+            {
+                "name": f"大生命药剂",
+                "description": f"恢复 {10000 * floor} 点生命值",
+                "price": 1000 * floor,
+                "key": pygame.K_4,
+                "label": "4",
+                "icon": self._create_potion_icon((200, 0, 0), large=True),  # 深红色大药水
+                "action": self._buy_large_hp
+            },
+            {
+                "name": f"高级力量宝石",
+                "description": f"永久提升 {50 * floor} 点攻击力",
+                "price": 1000 * floor,
+                "key": pygame.K_5,
+                "label": "5",
+                "icon": self._create_gem_icon((255, 50, 50), large=True),  # 深红色大宝石
+                "action": self._buy_large_atk
+            },
+            {
+                "name": f"高级护盾宝石",
+                "description": f"永久提升 {50 * floor} 点防御力",
+                "price": 1000 * floor,
+                "key": pygame.K_6,
+                "label": "6",
+                "icon": self._create_gem_icon((50, 50, 255), large=True),  # 深蓝色大宝石
+                "action": self._buy_large_def
+            }
+        ]
+
+        # 商店按钮
+        self.exit_button = pygame.Rect(
+            self.window_x + self.window_width - 160,
+            self.window_y + self.window_height - 60,
+            140, 40
+        )
+
+        # 购买结果消息
+        self.message = None
+        self.message_time = 0
+        self.message_duration = 2000  # 消息显示时长（毫秒）
+
+        # 移除粒子效果
+        self.particles = []
+
+        # 商品悬停状态
+        self.hovered_item = None
+        self.hovered_button = False
+
+        # 创建商店表面（用于绘制基础界面）
+        self.shop_surface = pygame.Surface((self.window_width, self.window_height), pygame.SRCALPHA)
+        self._create_shop_background()
+
+    def _create_potion_icon(self, color, large=False):
+        """创建药水图标"""
+        size = 32 if large else 24
+        icon = pygame.Surface((size, size), pygame.SRCALPHA)
+
+        # 瓶身
+        bottle_width = size - 8
+        bottle_height = size * 0.8
+
+        # 瓶身（玻璃半透明效果）
+        bottle_rect = pygame.Rect(
+            (size - bottle_width) // 2,
+            size - bottle_height,
+            bottle_width, bottle_height
+        )
+        pygame.draw.rect(icon, (150, 150, 200, 180), bottle_rect, border_radius=int(bottle_width * 0.3))
+
+        # 液体
+        liquid_height = bottle_height * 0.7
+        liquid_rect = pygame.Rect(
+            bottle_rect.x + 2,
+            bottle_rect.y + bottle_height - liquid_height,
+            bottle_width - 4, liquid_height - 2
+        )
+        pygame.draw.rect(icon, color, liquid_rect, border_radius=int(bottle_width * 0.2))
+
+        # 瓶口和瓶塞
+        neck_width = bottle_width * 0.4
+        neck_height = size * 0.15
+        pygame.draw.rect(icon, (180, 180, 220),
+                         ((size - neck_width) // 2, size - bottle_height - neck_height,
+                          neck_width, neck_height),
+                         border_radius=2)
+
+        # 瓶塞
+        cork_rect = pygame.Rect(
+            (size - neck_width + 2) // 2,
+            size - bottle_height - neck_height - 4,
+            neck_width - 2, 6
+        )
+        pygame.draw.rect(icon, (150, 100, 50), cork_rect, border_radius=2)
+
+        # 高光效果
+        pygame.draw.line(icon, (255, 255, 255, 150),
+                         (bottle_rect.x + 2, bottle_rect.y + 5),
+                         (bottle_rect.x + 5, bottle_rect.y + 8), 2)
+
+        return icon
+
+    def _create_gem_icon(self, color, large=False):
+        """创建宝石图标"""
+        size = 32 if large else 24
+        icon = pygame.Surface((size, size), pygame.SRCALPHA)
+
+        # 宝石中心点
+        center = (size // 2, size // 2)
+
+        # 宝石切面（八边形）
+        gem_size = size * 0.7
+        points = []
+        for i in range(8):
+            angle = math.pi * i / 4
+            x = center[0] + math.cos(angle) * gem_size / 2
+            y = center[1] + math.sin(angle) * gem_size / 2
+            points.append((x, y))
+
+        # 绘制宝石主体
+        pygame.draw.polygon(icon, color, points)
+
+        # 绘制高光
+        highlight_points = [
+            (center[0], center[1] - gem_size / 3),
+            (center[0] + gem_size / 4, center[1]),
+            (center[0], center[1] + gem_size / 3)
+        ]
+        pygame.draw.polygon(icon, (255, 255, 255, 100), highlight_points)
+
+        # 添加闪光点
+        pygame.draw.circle(icon, (255, 255, 255, 200),
+                           (center[0] - gem_size / 4, center[1] - gem_size / 4), 2)
+
+        return icon
+
+    def _create_shop_background(self):
+        """创建商店背景"""
+        # 绘制主窗口背景（使用半透明背景）
+        self.shop_surface.fill(self.COLOR_BG)
+
+        # 窗口边框
+        border_size = 4
+        pygame.draw.rect(self.shop_surface, self.COLOR_BORDER,
+                         (0, 0, self.window_width, self.window_height),
+                         border_size, border_radius=10)
+
+        # 绘制装饰性的角落纹饰
+        corner_size = 20
+        # 左上角
+        pygame.draw.line(self.shop_surface, self.COLOR_TITLE,
+                         (border_size, border_size),
+                         (corner_size, border_size), 3)
+        pygame.draw.line(self.shop_surface, self.COLOR_TITLE,
+                         (border_size, border_size),
+                         (border_size, corner_size), 3)
+
+        # 右上角
+        pygame.draw.line(self.shop_surface, self.COLOR_TITLE,
+                         (self.window_width - border_size, border_size),
+                         (self.window_width - corner_size, border_size), 3)
+        pygame.draw.line(self.shop_surface, self.COLOR_TITLE,
+                         (self.window_width - border_size, border_size),
+                         (self.window_width - border_size, corner_size), 3)
+
+        # 左下角
+        pygame.draw.line(self.shop_surface, self.COLOR_TITLE,
+                         (border_size, self.window_height - border_size),
+                         (corner_size, self.window_height - border_size), 3)
+        pygame.draw.line(self.shop_surface, self.COLOR_TITLE,
+                         (border_size, self.window_height - border_size),
+                         (border_size, self.window_height - corner_size), 3)
+
+        # 右下角
+        pygame.draw.line(self.shop_surface, self.COLOR_TITLE,
+                         (self.window_width - border_size, self.window_height - border_size),
+                         (self.window_width - corner_size, self.window_height - border_size), 3)
+        pygame.draw.line(self.shop_surface, self.COLOR_TITLE,
+                         (self.window_width - border_size, self.window_height - border_size),
+                         (self.window_width - border_size, self.window_height - corner_size), 3)
+
+        # 绘制标题
+        title_text = self.title_font.render("神秘商店", True, self.COLOR_TITLE)
+        title_rect = title_text.get_rect(centerx=self.window_width // 2, top=20)
+        self.shop_surface.blit(title_text, title_rect)
+
+        # 绘制分隔线
+        pygame.draw.line(self.shop_surface, self.COLOR_BORDER,
+                         (50, title_rect.bottom + 15),
+                         (self.window_width - 50, title_rect.bottom + 15), 2)
+
+        # 绘制底部信息
+        info_text = self.info_font.render("按下对应数字键购买物品，按ESC退出", True, self.COLOR_TEXT)
+        info_rect = info_text.get_rect(centerx=self.window_width // 2, bottom=self.window_height - 20)
+        self.shop_surface.blit(info_text, info_rect)
+
+    def _add_shop_particle(self):
+        """添加商店魔法粒子效果 - 已禁用"""
+        pass
+
+    def _update_particles(self, dt):
+        """更新粒子效果 - 已禁用"""
+        # 粒子效果已被禁用，此函数保留以维持接口一致性
+        pass
+
+    def _draw_item_card(self, item, x, y, width, height, hovered=False):
+        """绘制商品卡片"""
+        # 基础卡片背景
+        card_color = self.COLOR_HIGHLIGHT if hovered else (50, 50, 70)
+        card_rect = pygame.Rect(x, y, width, height)
+        pygame.draw.rect(self.screen, card_color, card_rect, border_radius=8)
+        pygame.draw.rect(self.screen, self.COLOR_BORDER, card_rect, 2, border_radius=8)
+
+        # 物品图标 - 位置调整
+        icon_rect = item['icon'].get_rect(topleft=(x + 15, y + (height - item['icon'].get_height()) // 2))
+        self.screen.blit(item['icon'], icon_rect)
+
+        # 键位示意
+        key_size = 30
+        key_rect = pygame.Rect(x + width - key_size - 15, y + 10, key_size, key_size)
+        pygame.draw.rect(self.screen, (70, 70, 90), key_rect, border_radius=5)
+        pygame.draw.rect(self.screen, self.COLOR_BORDER, key_rect, 1, border_radius=5)
+
+        key_text = self.item_font.render(item['label'], True, self.COLOR_TEXT)
+        key_text_rect = key_text.get_rect(center=key_rect.center)
+        self.screen.blit(key_text, key_text_rect)
+
+        # 物品名称 - 位置调整
+        name_text = self.item_font.render(item['name'], True, self.COLOR_TEXT)
+        name_rect = name_text.get_rect(topleft=(x + 60, y + 12))
+        self.screen.blit(name_text, name_rect)
+
+        # 物品描述 - 位置调整，颜色变淡
+        desc_text = self.info_font.render(item['description'], True, self.COLOR_DESC)
+        desc_rect = desc_text.get_rect(topleft=(x + 60, y + 42))
+        self.screen.blit(desc_text, desc_rect)
+
+        # 价格（根据玩家能否负担变色）- 移至底部
+        affordable = self.player.coins >= item['price']
+        price_color = self.COLOR_AFFORDABLE if affordable else self.COLOR_UNAFFORDABLE
+
+        price_text = self.price_font.render(f"{item['price']} 金币", True, price_color)
+        price_rect = price_text.get_rect(bottomright=(x + width - 15, y + height - 15))
+        self.screen.blit(price_text, price_rect)
+
+        # 金币图标
+        coin_radius = 8
+        coin_center = (price_rect.left - coin_radius - 5, price_rect.centery)
+        pygame.draw.circle(self.screen, self.COLOR_PRICE, coin_center, coin_radius)
+        pygame.draw.circle(self.screen, self.COLOR_SHINE,
+                           (coin_center[0] - 2, coin_center[1] - 2), 2)
+
+        return card_rect
+
+    def _buy_small_hp(self):
+        """购买小HP药水"""
+        price = 100 * self.floor
+        if self.player.coins >= price:
+            self.player.hp = min(self.player.hp + 1000 * self.floor, self.player.max_hp)
+            self.player.coins -= price
+            self.message = f"购买成功！恢复 {1000 * self.floor} 点生命值"
+            self._create_purchase_effect((255, 0, 0))
+            return True
+        else:
+            self.message = "金币不足！"
+            return False
+
+    def _buy_small_atk(self):
+        """购买小攻击宝石"""
+        price = 100 * self.floor
+        if self.player.coins >= price:
+            self.player.base_atk += 5 * self.floor
+            self.player.coins -= price
+            self.message = f"购买成功！攻击力 +{5 * self.floor}"
+            self._create_purchase_effect((255, 100, 100))
+            return True
+        else:
+            self.message = "金币不足！"
+            return False
+
+    def _buy_small_def(self):
+        """购买小防御宝石"""
+        price = 100 * self.floor
+        if self.player.coins >= price:
+            self.player.base_defense += 5 * self.floor
+            self.player.coins -= price
+            self.message = f"购买成功！防御力 +{5 * self.floor}"
+            self._create_purchase_effect((100, 100, 255))
+            return True
+        else:
+            self.message = "金币不足！"
+            return False
+
+    def _buy_large_hp(self):
+        """购买大HP药水"""
+        price = 1000 * self.floor
+        if self.player.coins >= price:
+            self.player.hp = min(self.player.hp + 10000 * self.floor, self.player.max_hp)
+            self.player.coins -= price
+            self.message = f"购买成功！恢复 {10000 * self.floor} 点生命值"
+            self._create_purchase_effect((200, 0, 0), large=True)
+            return True
+        else:
+            self.message = "金币不足！"
+            return False
+
+    def _buy_large_atk(self):
+        """购买大攻击宝石"""
+        price = 1000 * self.floor
+        if self.player.coins >= price:
+            self.player.base_atk += 50 * self.floor
+            self.player.coins -= price
+            self.message = f"购买成功！攻击力 +{50 * self.floor}"
+            self._create_purchase_effect((255, 50, 50), large=True)
+            return True
+        else:
+            self.message = "金币不足！"
+            return False
+
+    def _buy_large_def(self):
+        """购买大防御宝石"""
+        price = 1000 * self.floor
+        if self.player.coins >= price:
+            self.player.base_defense += 50 * self.floor
+            self.player.coins -= price
+            self.message = f"购买成功！防御力 +{50 * self.floor}"
+            self._create_purchase_effect((50, 50, 255), large=True)
+            return True
+        else:
+            self.message = "金币不足！"
+            return False
+
+    def _create_purchase_effect(self, color, large=False):
+        """创建购买特效 - 已禁用粒子效果和音效"""
+        # 所有效果已移除，保留函数以维持接口一致性
+        pass
+
+    def run(self):
+        """运行商店界面"""
+        clock = pygame.time.Clock()
+        running = True
+
+        # 创建半透明遮罩
+        overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))  # 半透明黑色背景
+
+        while running:
+            dt = clock.tick(60) / 1000  # 转换为秒
+            current_time = pygame.time.get_ticks()
+
+            # 处理输入
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    else:
+                        # 检查是否按下了商品对应的键
+                        for item in self.items:
+                            if event.key == item['key']:
+                                success = item['action']()
+                                if success:
+                                    self.message_time = current_time
+
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:  # 左键点击
+                        # 检查是否点击了退出按钮
+                        if self.exit_button.collidepoint(event.pos):
+                            running = False
+
+                        # 检查是否点击了商品
+                        for i, item in enumerate(self.items):
+                            item_rect = self._get_item_rect(i)
+                            if item_rect.collidepoint(event.pos):
+                                success = item['action']()
+                                if success:
+                                    self.message_time = current_time
+
+            # 更新鼠标悬停状态
+            mouse_pos = pygame.mouse.get_pos()
+            self.hovered_item = None
+            for i, item in enumerate(self.items):
+                item_rect = self._get_item_rect(i)
+                if item_rect.collidepoint(mouse_pos):
+                    self.hovered_item = i
+                    break
+
+            self.hovered_button = self.exit_button.collidepoint(mouse_pos)
+
+            # 更新粒子效果
+            self._update_particles(dt)
+
+            # 绘制界面
+            self._draw_shop(current_time)
+
+            pygame.display.flip()
+
+    def _get_item_rect(self, index):
+        """获取商品项目的矩形区域"""
+        # 计算行和列
+        row = index // 2
+        col = index % 2
+
+        # 计算卡片尺寸和位置 - 调整为更适合的尺寸
+        card_width = (self.window_width - 80) // 2  # 增加间距
+        card_height = 100  # 增加卡片高度，避免文字重叠
+        card_x = self.window_x + 30 + col * (card_width + 20)
+        card_y = self.window_y + 100 + row * (card_height + 20)
+
+        return pygame.Rect(card_x, card_y, card_width, card_height)
+
+    def _draw_shop(self, current_time):
+        """绘制商店界面"""
+        # 不使用遮罩，保留游戏背景
+
+        # 绘制商店窗口
+        self.screen.blit(self.shop_surface, (self.window_x, self.window_y))
+
+        # 绘制当前金币（左上角）
+        coin_text = self.price_font.render(f"金币: {self.player.coins}", True, self.COLOR_PRICE)
+        coin_rect = coin_text.get_rect(topleft=(self.window_x + 30, self.window_y + 70))
+        self.screen.blit(coin_text, coin_rect)
+
+        # 绘制金币图标
+        coin_radius = 10
+        coin_center = (coin_rect.right + coin_radius + 5, coin_rect.centery)
+        pygame.draw.circle(self.screen, self.COLOR_PRICE, coin_center, coin_radius)
+        # 添加金币图标高光效果
+        pygame.draw.circle(self.screen, self.COLOR_SHINE,
+                           (coin_center[0] - 3, coin_center[1] - 3), 3)
+
+        # 绘制楼层信息（右上角）
+        floor_text = self.price_font.render(f"当前楼层: {self.floor}", True, self.COLOR_TEXT)
+        floor_rect = floor_text.get_rect(topright=(self.window_x + self.window_width - 30, self.window_y + 70))
+        self.screen.blit(floor_text, floor_rect)
+
+        # 绘制商品项目
+        for i, item in enumerate(self.items):
+            rect = self._get_item_rect(i)
+            self._draw_item_card(
+                item, rect.x, rect.y, rect.width, rect.height,
+                hovered=(i == self.hovered_item)
+            )
+
+        # 绘制退出按钮
+        button_color = self.COLOR_BUTTON_HOVER if self.hovered_button else self.COLOR_BUTTON
+        pygame.draw.rect(self.screen, button_color, self.exit_button, border_radius=5)
+        pygame.draw.rect(self.screen, self.COLOR_BORDER, self.exit_button, 2, border_radius=5)
+
+        exit_text = self.item_font.render("退出", True, self.COLOR_TEXT)
+        exit_rect = exit_text.get_rect(center=self.exit_button.center)
+        self.screen.blit(exit_text, exit_rect)
+
+        # 绘制消息
+        if self.message and current_time - self.message_time < self.message_duration:
+            # 消息框背景
+            msg_width = 450
+            msg_height = 60
+            msg_x = self.window_x + (self.window_width - msg_width) // 2
+            msg_y = self.window_y + 20
+
+            msg_rect = pygame.Rect(msg_x, msg_y, msg_width, msg_height)
+            pygame.draw.rect(self.screen, (50, 50, 70, 200), msg_rect, border_radius=10)
+            pygame.draw.rect(self.screen, self.COLOR_PRICE, msg_rect, 2, border_radius=10)
+
+            # 消息文本
+            msg_text = self.item_font.render(self.message, True, self.COLOR_TEXT)
+            msg_text_rect = msg_text.get_rect(center=msg_rect.center)
+            self.screen.blit(msg_text, msg_text_rect)
+
+
+def shop_screen(screen, player, floor):
+    shop = DungeonShop(screen, player, floor)
+    shop.run()
 
 # -------------- 攻击类特效 -------------------
+
 
 # 新增攻击特效类
 class WeaponSwingEffect:
@@ -1343,14 +2739,14 @@ class LightningEffect:
                              random.randint(1, thickness))  # 随机线宽增强质感
 
             # 生成随机分叉
-            if random.random() < 0.4 and i < len(self.main_points) - 2:
+            if random.random() < 0.3 and i < len(self.main_points) - 2:
                 mid_point = (
                     (start_pos[0] + end_pos[0]) // 2 + random.randint(-5, 5),
                     (start_pos[1] + end_pos[1]) // 2 + random.randint(-5, 5)
                 )
                 branch_end = (
-                    mid_point[0] + random.randint(-35, 35),
-                    mid_point[1] + random.randint(-35, 35)
+                    mid_point[0] + random.randint(-10, 10),
+                    mid_point[1] + random.randint(-10, 10)
                 )
                 branch_points = self._generate_lightning_points(mid_point, branch_end, 0.5)
 
@@ -1381,11 +2777,290 @@ class LightningEffect:
                                    (int(p['pos'][0]), int(p['pos'][1])),
                                    p['size'] * life_ratio)
 
+# -------------- 守护闪电 ----------------
+
+
+class SummonLightningBall:
+    def __init__(self, player, ball_count=6, duration=10.0, attack_range=6, attack_speed=1.0, damage_multiple=1.5):
+        self.player = player
+        self.duration = duration  # 球体存在时间（秒）
+        self.lifetime = duration  # 剩余生命周期
+        self.attack_range = attack_range  # 攻击范围（格）
+        self.ball_count = ball_count  # 闪电球数量
+
+        # 创建多个闪电球
+        self.lightning_balls = []
+        for i in range(ball_count):
+            self.lightning_balls.append(self.LightningBall(
+                player,
+                orbit_angle=int(2 * math.pi * i / ball_count),  # 均匀分布在圆周上
+                orbit_speed=1.0 + random.uniform(-0.3, 0.3),  # 略微不同的轨道速度
+                attack_speed=attack_speed,
+                damage_multiple=damage_multiple
+            ))
+
+    def update(self, dt, game):
+        # 更新生命周期
+        self.lifetime -= dt
+        if self.lifetime <= 0:
+            # 生成消散特效
+            for ball in self.lightning_balls:
+                for _ in range(10):  # 每个球生成10个粒子
+                    game.fear_particles.append({
+                        'pos': list(ball.position),
+                        'vel': [random.uniform(-8, 8), random.uniform(-8, 8)],
+                        'life': random.uniform(0.5, 1.2),
+                        'max_life': 1.2,
+                        'size': random.uniform(2, 5),
+                        'color': (0, 191, 255)
+                    })
+            return False  # 生命周期结束，移除所有球体
+
+        # 更新所有球体
+        for ball in self.lightning_balls:
+            ball.update(dt, game)
+
+        # 寻找范围内的目标
+        targets = []
+        for monster in game.monsters:
+            distance = game.calculate_distance(
+                (game.player.x, game.player.y),
+                (monster.x, monster.y)
+            )
+            if distance <= self.attack_range:
+                targets.append(monster)
+
+        # 每个球体尝试攻击目标
+        if targets:
+            for ball in self.lightning_balls:
+                ball.try_attack(targets, game)
+
+        return True  # 继续存在
+
+    def draw(self, screen):
+        for ball in self.lightning_balls:
+            ball.draw(screen)
+
+    # 内部类: 单个闪电球
+    class LightningBall:
+        def __init__(self, player, orbit_angle=0, orbit_speed=2.0, attack_speed=1.0, damage_multiple=1.5):
+            self.player = player
+
+            # 轨道参数
+            self.orbit_radius = TILE_SIZE * 2.0  # 环绕玩家的距离
+            self.orbit_angle = orbit_angle  # 初始角度
+            self.orbit_speed = orbit_speed  # 轨道速度（弧度/秒）
+
+            # 攻击参数
+            self.attack_speed = attack_speed  # 每秒攻击次数
+            self.attack_cooldown = random.uniform(0, 1.0 / attack_speed)  # 随机初始冷却
+            self.damage_multiple = damage_multiple  # 伤害倍率
+
+            # 位置为玩家位置的偏移
+            player_pos = (player.x * TILE_SIZE + TILE_SIZE // 2,
+                          player.y * TILE_SIZE + TILE_SIZE // 2)
+            self.position = [
+                player_pos[0] + math.cos(orbit_angle) * self.orbit_radius,
+                player_pos[1] + math.sin(orbit_angle) * self.orbit_radius
+            ]
+
+            # 视觉参数
+            self.size = 11  # 球体基础尺寸
+            self.particles = []  # 粒子效果列表
+            self.lightning_connections = []  # 闪电连接点
+
+            # 添加初始粒子效果
+            for _ in range(10):
+                self.add_particle()
+
+        def update(self, dt, game):
+            # 更新轨道位置
+            self.orbit_angle += self.orbit_speed * dt
+            player_center = (game.player.x * TILE_SIZE + TILE_SIZE // 2,
+                             game.player.y * TILE_SIZE + TILE_SIZE // 2)
+            self.position = [
+                player_center[0] + math.cos(self.orbit_angle) * self.orbit_radius,
+                player_center[1] + math.sin(self.orbit_angle) * self.orbit_radius
+            ]
+
+            # 更新攻击冷却
+            if self.attack_cooldown > 0:
+                self.attack_cooldown -= dt
+
+            # 更新粒子效果
+            for p in self.particles[:]:
+                p['pos'][0] += p['vel'][0] * dt * 60
+                p['pos'][1] += p['vel'][1] * dt * 60
+                p['life'] -= dt
+                if p['life'] <= 0:
+                    self.particles.remove(p)
+
+            # 定期添加新粒子
+            if random.random() < 0.2:
+                self.add_particle()
+
+            # 动态更新闪电连接点
+            if random.random() < 0.15 or not self.lightning_connections:
+                self.lightning_connections = []
+                connection_count = random.randint(2, 3)
+                for _ in range(connection_count):
+                    angle = random.uniform(0, 2 * math.pi)
+                    distance = random.uniform(self.size * 1.2, self.size * 2)
+                    self.lightning_connections.append({
+                        'pos': [
+                            self.position[0] + math.cos(angle) * distance,
+                            self.position[1] + math.sin(angle) * distance
+                        ],
+                        'life': random.uniform(0.2, 0.4)
+                    })
+
+            # 更新连接点生命周期
+            for conn in self.lightning_connections[:]:
+                conn['life'] -= dt
+                if conn['life'] <= 0:
+                    self.lightning_connections.remove(conn)
+
+        def try_attack(self, targets, game):
+            # 如果有攻击冷却，不攻击
+            if self.attack_cooldown > 0 or not targets:
+                return
+
+            # 选择一个随机目标攻击
+            target = random.choice(targets)
+
+            # 计算伤害（带随机波动）
+            base_damage = game.player.atk * self.damage_multiple
+            damage_variation = random.uniform(0.8, 1.2)
+            damage = base_damage * damage_variation
+            actual_damage = max(damage - target.defense, 0)
+
+            # 应用伤害
+            target.hp -= actual_damage
+
+            # 添加闪电效果
+            start_pos = list(self.position)
+            # 闪电起点小幅度随机偏移，增加视觉多样性
+            start_jitter = [random.uniform(-5, 5), random.uniform(-5, 5)]
+            start_pos[0] += start_jitter[0]
+            start_pos[1] += start_jitter[1]
+
+            # 闪电终点为怪物位置（也带随机偏移）
+            end_pos = [target.x * TILE_SIZE + TILE_SIZE // 2,
+                       target.y * TILE_SIZE + TILE_SIZE // 2]
+            end_jitter = [random.uniform(-5, 5), random.uniform(-5, 5)]
+            end_pos[0] += end_jitter[0]
+            end_pos[1] += end_jitter[1]
+
+            # 创建闪电效果
+            effect = LightningEffect(
+                start=tuple(start_pos),
+                end=tuple(end_pos),
+                duration=0.4,
+                damage=actual_damage
+            )
+            game.skill_effects.append(effect)
+            game.add_message(f"守护闪电球对{target.name}造成{int(actual_damage)}点伤害!") # 添加攻击信息
+            self.attack_cooldown = 1.0 / self.attack_speed # 设置攻击冷却
+
+        def add_particle(self):
+            """添加能量粒子效果"""
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(1, 5)
+            lifespan = random.uniform(0.2, 0.8)
+
+            # 随机选择粒子颜色
+            spark_color = random.choice([
+                (255, 255, 200),  # 明亮白色
+                (150, 150, 255),  # 淡蓝色
+                (0, 191, 255),  # 深蓝色
+                (100, 220, 255)  # 天蓝色
+            ])
+
+            self.particles.append({
+                'pos': list(self.position),
+                'vel': [math.cos(angle) * speed, math.sin(angle) * speed],
+                'life': lifespan,
+                'max_life': lifespan,
+                'size': random.uniform(1, 2.5),
+                'color': spark_color
+            })
+
+        def draw(self, screen):
+            anim_time = pygame.time.get_ticks()
+
+            # 球体核心脉动效果
+            pulse = 0.5 + 0.5 * math.sin(anim_time / 200 + self.orbit_angle)
+            core_radius = int(self.size * (1 + 0.2 * pulse))
+
+            # 绘制多层递减透明度的核心
+            for i in range(3):
+                alpha = 200 - i * 50
+                radius = core_radius - i * 2
+
+                if radius <= 0:
+                    continue
+
+                temp_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+                color = (0, 191, 255, alpha) if i % 2 == 0 else (100, 180, 255, alpha)
+                pygame.draw.circle(temp_surf, color, (radius, radius), radius)
+                screen.blit(temp_surf, (int(self.position[0] - radius), int(self.position[1] - radius)))
+
+            # 绘制能量粒子
+            for p in self.particles:
+                life_ratio = p['life'] / p['max_life']
+                particle_alpha = int(255 * life_ratio)
+
+                temp_surf = pygame.Surface((int(p['size'] * 2), int(p['size'] * 2)), pygame.SRCALPHA)
+                pygame.draw.circle(temp_surf, (*p['color'], particle_alpha),
+                                   (int(p['size']), int(p['size'])),
+                                   int(p['size'] * life_ratio))
+                screen.blit(temp_surf, (int(p['pos'][0] - p['size']), int(p['pos'][1] - p['size'])))
+
+            # 绘制闪电连接
+            for conn in self.lightning_connections:
+                # 绘制从球心到连接点的闪电
+                life_ratio = conn['life'] / 0.4  # 假设最大生命周期为0.4
+
+                # 生成闪电路径点
+                points = []
+                # 起点为球心
+                points.append(tuple(self.position))
+
+                # 生成中间随机点
+                segments = random.randint(1, 3)
+                for i in range(segments):
+                    t = (i + 1) / (segments + 1)
+                    mid_x = self.position[0] + (conn['pos'][0] - self.position[0]) * t
+                    mid_y = self.position[1] + (conn['pos'][1] - self.position[1]) * t
+
+                    # 添加随机偏移
+                    jitter_range = 8 * (1 - t) * life_ratio
+                    jitter_x = random.uniform(-jitter_range, jitter_range)
+                    jitter_y = random.uniform(-jitter_range, jitter_range)
+
+                    points.append((mid_x + jitter_x, mid_y + jitter_y))
+
+                # 终点为连接点
+                points.append(tuple(conn['pos']))
+
+                # 绘制闪电线段
+                for i in range(len(points) - 1):
+                    # 随机选择颜色
+                    color = random.choice([
+                        (150, 220, 255, int(255 * life_ratio)),
+                        (200, 230, 255, int(255 * life_ratio)),
+                        (100, 180, 255, int(255 * life_ratio))
+                    ])
+
+                    pygame.draw.line(screen, color, points[i], points[i + 1],
+                                     max(1, int(3 * life_ratio)))
+
 # ---------------- 圣光球 -------------------------
 
 
-class HollyBallEffect:
-    def __init__(self, player_pos, ball_count=6, seek_range=10, damage_multiplier=2.5):
+class HolyBallEffect:
+    def __init__(self, player_pos, ball_count=6, seek_range=10, damage_multiplier=2.5,
+                 is_monster_skill=False, target=None, monster=None):
         self.player_pos = player_pos
         self.ball_count = ball_count
         self.seek_range = seek_range
@@ -1393,12 +3068,17 @@ class HollyBallEffect:
         self.duration = 5.0
         self.progress = 0.0
 
+        # 新增参数用于区分怪物/玩家技能
+        self.is_monster_skill = is_monster_skill
+        self.target = target  # 怪物技能时为玩家对象，玩家技能时为None
+        self.monster = monster  # 怪物技能时为怪物对象，玩家技能时为None
+
         # Lightning balls data
         self.balls = []
         self.targets = []
         self.explosions = []
 
-        # Initialize the balls with random positions around the player
+        # Initialize the balls with random positions around the origin position
         for i in range(ball_count):
             angle = math.pi * 2 * i / ball_count
             offset_x = math.cos(angle) * 3
@@ -1418,7 +3098,6 @@ class HollyBallEffect:
                 'state': 'seeking',  # States: seeking, attacking, exploded
                 'target': None,
                 'color': self._generate_random_holy_color(),
-                'particles': []
             })
 
     def _generate_random_holy_color(self):
@@ -1431,78 +3110,113 @@ class HollyBallEffect:
         ]
         return random.choice(colors)
 
-    def update(self, dt, monsters):
+    def update(self, dt, monsters_or_player):
         self.progress += dt / self.duration
         damage_results = []
+
+        # 根据释放者类型确定目标列表
+        if self.is_monster_skill:
+            # 怪物技能 - 目标是玩家
+            player = self.target
+        else:
+            # 玩家技能 - 目标是怪物列表
+            monsters = monsters_or_player
 
         # Process each ball
         for ball in self.balls:
             if ball['state'] == 'exploded':
                 continue
 
-            # Update particles for all balls
-            self._update_ball_particles(ball, dt)
-
             # Seeking logic - find a target if needed
             if ball['state'] == 'seeking':
                 if not ball['target']:
-                    # Find nearby monsters within seek_range
-                    potential_targets = []
-                    for monster in monsters:
+                    if self.is_monster_skill:
+                        # 怪物技能直接瞄准玩家
                         distance = self._calculate_distance(
                             (ball['pos'][0], ball['pos'][1]),
-                            (monster.x, monster.y)
+                            (player.x, player.y)
                         )
                         if distance <= self.seek_range:
-                            potential_targets.append((distance, monster))
-
-                    # Select closest target
-                    if potential_targets:
-                        potential_targets.sort(key=lambda x: x[0])
-                        ball['target'] = potential_targets[0][1]
-                        ball['state'] = 'attacking'
+                            ball['target'] = player
+                            ball['state'] = 'attacking'
+                        else:
+                            # 没有目标时围绕原点移动
+                            self._update_seeking_movement(ball, dt)
                     else:
-                        # If no target, move in a circular pattern around player
-                        self._update_seeking_movement(ball, dt)
+                        # 玩家技能寻找怪物目标
+                        potential_targets = []
+                        for monster in monsters:
+                            distance = self._calculate_distance(
+                                (ball['pos'][0], ball['pos'][1]),
+                                (monster.x, monster.y)
+                            )
+                            if distance <= self.seek_range:
+                                potential_targets.append((distance, monster))
+
+                        # Select closest target
+                        if potential_targets:
+                            potential_targets.sort(key=lambda x: x[0])
+                            ball['target'] = potential_targets[0][1]
+                            ball['state'] = 'attacking'
+                        else:
+                            # 没有目标时围绕原点移动
+                            self._update_seeking_movement(ball, dt)
                 else:
                     ball['state'] = 'attacking'
 
             # Attacking logic - move toward target
             if ball['state'] == 'attacking' and ball['target']:
-                monster = ball['target']
+                if self.is_monster_skill:
+                    # 攻击玩家
+                    target = ball['target']
+                    target_pos = [
+                        target.x * TILE_SIZE + TILE_SIZE // 2,
+                        target.y * TILE_SIZE + TILE_SIZE // 2
+                    ]
+                else:
+                    # 攻击怪物
+                    monster = ball['target']
 
-                # Check if monster still exists and is alive
-                if monster not in monsters or monster.hp <= 0:
-                    ball['target'] = None
-                    ball['state'] = 'seeking'
-                    continue
+                    # 检查怪物是否还存在
+                    if monster not in monsters or monster.hp <= 0:
+                        ball['target'] = None
+                        ball['state'] = 'seeking'
+                        continue
 
-                # Calculate movement vector toward target
-                target_pos = [
-                    monster.x * TILE_SIZE + TILE_SIZE // 2,
-                    monster.y * TILE_SIZE + TILE_SIZE // 2
-                ]
+                    target_pos = [
+                        monster.x * TILE_SIZE + TILE_SIZE // 2,
+                        monster.y * TILE_SIZE + TILE_SIZE // 2
+                    ]
+
+                # 通用逻辑：向目标移动
                 current_pos = ball['screen_pos']
-
-                # Direction vector
                 dx = target_pos[0] - current_pos[0]
                 dy = target_pos[1] - current_pos[1]
                 distance = math.hypot(dx, dy)
 
                 # If reached the target, explode and damage
                 if distance < TILE_SIZE:
-                    # Record explosion
                     self.explosions.append({
-                        'pos': (monster.x, monster.y),
+                        'pos': ball['target'].x if hasattr(ball['target'], 'x') else 0,
                         'screen_pos': target_pos,
                         'time': 0.5,  # Explosion duration
                         'size': TILE_SIZE * 2,
                         'color': ball['color']
                     })
 
-                    # Calculate damage
-                    dmg = self.damage_multiplier * random.uniform(0.8, 1.2)
-                    damage_results.append((monster, dmg))
+                    # 基于释放者类型计算伤害
+                    if self.is_monster_skill:
+                        # 怪物对玩家造成伤害（直接在这里执行）
+                        dmg = self.monster.atk * self.damage_multiplier * random.uniform(0.8, 1.2)
+                        actual_damage = max(dmg - self.target.defense, 0)
+                        self.target.hp -= actual_damage
+
+                        # 不需要保存到damage_results，直接添加消息
+                        if hasattr(self, 'add_message'):
+                            self.add_message(f"神圣球对你造成{int(actual_damage)}点伤害！")
+                    else:
+                        # 玩家对怪物造成伤害（通过damage_results返回）
+                        damage_results.append((ball['target'], self.damage_multiplier))
 
                     # Mark as exploded
                     ball['state'] = 'exploded'
@@ -1526,41 +3240,18 @@ class HollyBallEffect:
         # Return True if the effect is still active
         return self.progress < 1.0 or self.explosions, damage_results
 
-    def _update_ball_particles(self, ball, dt):
-        """Update the particles for a ball"""
-        # Add new particles
-        if ball['state'] != 'exploded' and random.random() < 0.3:
-            angle = random.uniform(0, math.pi * 2)
-            speed = random.uniform(0.5, 2.0)
-            ball['particles'].append({
-                'pos': ball['screen_pos'].copy(),
-                'vel': [math.cos(angle) * speed, math.sin(angle) * speed],
-                'life': random.uniform(0.3, 0.7),
-                'max_life': 0.7,
-                'size': random.uniform(1, 3),
-                'color': self._lighten_color(ball['color'])
-            })
-
-        # Update existing particles
-        for particle in ball['particles'][:]:
-            particle['pos'][0] += particle['vel'][0]
-            particle['pos'][1] += particle['vel'][1]
-            particle['life'] -= dt
-
-            # Remove dead particles
-            if particle['life'] <= 0:
-                ball['particles'].remove(particle)
-
     def _update_seeking_movement(self, ball, dt):
-        """Update movement for a ball in seeking state"""
-        # Orbit around the player's position with some randomness
+        # Orbit around the origin position with some randomness
         time = pygame.time.get_ticks() / 1000
         radius = 3 * TILE_SIZE
 
         # Calculate new position in a circular path
-        ball['screen_pos'][0] = self.player_pos[0] * TILE_SIZE + TILE_SIZE // 2 + math.cos(
+        origin_pos = [self.player_pos[0] * TILE_SIZE + TILE_SIZE // 2,
+                      self.player_pos[1] * TILE_SIZE + TILE_SIZE // 2]
+
+        ball['screen_pos'][0] = origin_pos[0] + math.cos(
             time + ball['phase']) * radius
-        ball['screen_pos'][1] = self.player_pos[1] * TILE_SIZE + TILE_SIZE // 2 + math.sin(
+        ball['screen_pos'][1] = origin_pos[1] + math.sin(
             time + ball['phase']) * radius
 
         # Add some randomness to make it look more dynamic
@@ -1572,15 +3263,9 @@ class HollyBallEffect:
         ball['pos'][1] = ball['screen_pos'][1] // TILE_SIZE
 
     def _calculate_distance(self, pos1, pos2):
-        """Calculate Manhattan distance between two grid positions"""
         return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
 
-    def _lighten_color(self, color):
-        """Create a lighter version of the color for particles"""
-        return tuple(min(c + 50, 255) for c in color)
-
     def draw(self, screen):
-        """Draw the holy ball effect"""
         # Draw explosions (behind balls)
         for explosion in self.explosions:
             self._draw_explosion(screen, explosion)
@@ -1591,17 +3276,7 @@ class HollyBallEffect:
                 continue
 
             # Draw particles first (behind the ball)
-            for particle in ball['particles']:
-                alpha = int(255 * (particle['life'] / particle['max_life']))
-                particle_color = (*particle['color'], alpha)
-
-                # Draw particle
-                pygame.draw.circle(
-                    screen,
-                    particle_color,
-                    (int(particle['pos'][0]), int(particle['pos'][1])),
-                    int(particle['size'] * (particle['life'] / particle['max_life']))
-                )
+            ball_x, ball_y = ball['screen_pos'][0], ball['screen_pos'][1]
 
             # Draw the holy ball with pulsating effect
             pulse = 0.8 + 0.2 * math.sin(pygame.time.get_ticks() / 100)
@@ -1621,15 +3296,15 @@ class HollyBallEffect:
             )
             screen.blit(
                 glow_surface,
-                (int(ball['screen_pos'][0] - size * 1.25),
-                 int(ball['screen_pos'][1] - size * 1.25))
+                (int(ball_x - size * 1.25),
+                 int(ball_y - size * 1.25))
             )
 
             # Draw core of the ball
             pygame.draw.circle(
                 screen,
                 ball['color'],
-                (int(ball['screen_pos'][0]), int(ball['screen_pos'][1])),
+                (int(ball_x), int(ball_y)),
                 int(size)
             )
 
@@ -1638,7 +3313,7 @@ class HollyBallEffect:
             pygame.draw.circle(
                 screen,
                 inner_color,
-                (int(ball['screen_pos'][0]), int(ball['screen_pos'][1])),
+                (int(ball_x - size * 0.3), int(ball_y - size * 0.3)),
                 int(size * 0.5)
             )
 
@@ -1679,85 +3354,847 @@ class HollyBallEffect:
                  int(explosion['screen_pos'][1] - ring_size))
             )
 
-        # Draw random lightning bolts emanating from explosion center
-        if random.random() < 0.4:
-            for _ in range(2):
-                angle = random.uniform(0, math.pi * 2)
-                length = explosion['size'] * progress
-                end_x = explosion['screen_pos'][0] + math.cos(angle) * length
-                end_y = explosion['screen_pos'][1] + math.sin(angle) * length
-
-                # Draw jagged lightning line
-                points = self._generate_lightning_points(
-                    explosion['screen_pos'],
-                    (end_x, end_y),
-                    4
-                )
-
-                if len(points) > 1:
-                    for i in range(len(points) - 1):
-                        pygame.draw.line(
-                            screen,
-                            explosion['color'],
-                            points[i],
-                            points[i + 1],
-                            2
-                        )
-
     def _draw_electric_arc(self, screen, ball):
-        """Draw electric arcs from ball to target"""
         if not ball['target']:
             return
 
-        # Get target position
-        target_pos = [
-            ball['target'].x * TILE_SIZE + TILE_SIZE // 2,
-            ball['target'].y * TILE_SIZE + TILE_SIZE // 2
-        ]
+        # 获取目标位置
+        if self.is_monster_skill:
+            # 目标是玩家
+            target_pos = [
+                ball['target'].x * TILE_SIZE + TILE_SIZE // 2,
+                ball['target'].y * TILE_SIZE + TILE_SIZE // 2
+            ]
+        else:
+            # 目标是怪物
+            target_pos = [
+                ball['target'].x * TILE_SIZE + TILE_SIZE // 2,
+                ball['target'].y * TILE_SIZE + TILE_SIZE // 2
+            ]
 
-        # Generate lightning path
-        points = self._generate_lightning_points(
-            ball['screen_pos'],
-            target_pos,
-            5  # Number of segments
-        )
+        # 生成光线路径
+        points = []
+        segments = 5
 
-        # Draw the lightning path
+        for i in range(segments + 1):
+            t = i / segments
+            # 线性插值
+            x = ball['screen_pos'][0] * (1 - t) + target_pos[0] * t
+            y = ball['screen_pos'][1] * (1 - t) + target_pos[1] * t
+
+            # 添加微小抖动
+            if 0 < i < segments:
+                x += random.uniform(-3, 3)
+                y += random.uniform(-3, 3)
+
+            points.append((x, y))
+
+        # 绘制光线
         if len(points) > 1:
             for i in range(len(points) - 1):
-                # Alternate colors for more dynamic effect
-                color = ball['color'] if i % 2 == 0 else (255, 255, 255)
+                # 从明亮到暗淡
+                alpha = int(200 * (1 - i / segments))
+                width = max(1, 3 - i)
 
                 pygame.draw.line(
                     screen,
-                    color,
+                    (*ball['color'], alpha),
                     points[i],
                     points[i + 1],
-                    max(1, int(ball['size'] * 0.15))  # Line thickness
+                    width
                 )
 
-    def _generate_lightning_points(self, start, end, segments):
-        """Generate points for a jagged lightning effect"""
-        points = [tuple(map(int, start))]
+# ----------------- 神圣光束 -------------
 
-        dx = end[0] - start[0]
-        dy = end[1] - start[1]
 
-        for i in range(1, segments):
-            # Calculate point along straight line
-            t = i / segments
-            x = start[0] + dx * t
-            y = start[1] + dy * t
+class HolyBeamEffect:
+    def __init__(self, start, end, duration=0.5, color_scheme="holy", damage=0):
+        self.start = start
+        self.end = end
+        self.duration = duration
+        self.progress = 0
+        self.color_scheme = color_scheme
+        self.damage = damage
 
-            # Add random displacement
-            displacement = (1 - t) * 15  # More displacement near start
-            x += random.uniform(-displacement, displacement)
-            y += random.uniform(-displacement, displacement)
+        # Simplified direct beam path with minimal points
+        self.beam_points = self._generate_straight_beam(start, end)
+        self.particles = []
 
-            points.append((int(x), int(y)))
+        # Streamlined color palettes
+        if color_scheme == "holy":
+            self.primary_colors = [
+                (255, 215, 0),  # Gold
+                (255, 223, 0)  # Golden yellow
+            ]
+            self.secondary_colors = [
+                (255, 255, 200),  # Pale gold
+                (255, 250, 205)  # Lemon chiffon
+            ]
+        else:  # lightning
+            self.primary_colors = [
+                (30, 144, 255),  # Dodger blue
+                (0, 191, 255)  # Deep sky blue
+            ]
+            self.secondary_colors = [
+                (200, 200, 255),  # Light blue
+                (240, 248, 255)  # Alice blue
+            ]
 
-        points.append(tuple(map(int, end)))
+        # Beam properties
+        self.beam_width = random.randint(3, 4)  # Reduced width
+        self.beam_phase = random.uniform(0, math.pi * 2)
+        self.beam_frequency = random.uniform(10, 12)
+
+        # Animation timing
+        self.time_elapsed = 0
+        self.pulse_frequency = random.uniform(9, 12)
+
+        # Initialize particles (fewer)
+        self._initialize_particles()
+
+        # Just a few energy nodes along the straight beam
+        self.energy_nodes = []
+        # Only add 1-2 nodes
+        for _ in range(random.randint(1, 2)):
+            t = random.uniform(0.3, 0.7)  # Position somewhere in the middle
+            node_pos = (
+                self.start[0] + (self.end[0] - self.start[0]) * t,
+                self.start[1] + (self.end[1] - self.start[1]) * t
+            )
+            self.energy_nodes.append({
+                'pos': node_pos,
+                'size': random.uniform(0.8, 1.5),  # Smaller
+                'phase': random.uniform(0, math.pi * 2)
+            })
+
+    def _generate_straight_beam(self, start, end):
+        """Generate a straight beam path with minimal points"""
+        points = [start]
+
+        # Add just one or two midpoints with very slight variation
+        distance = math.hypot(end[0] - start[0], end[1] - start[1])
+        if distance > 100:  # Only add midpoints for longer beams
+            # Create perpendicular vector for minimal deviation
+            dx = end[0] - start[0]
+            dy = end[1] - start[1]
+            length = max(0.001, math.sqrt(dx * dx + dy * dy))
+            perp_x, perp_y = -dy / length, dx / length
+
+            # Add 1-2 midpoints with very minimal offset
+            num_midpoints = 1 if distance < 200 else 2
+
+            for i in range(1, num_midpoints + 1):
+                t = i / (num_midpoints + 1)
+
+                # Base point along straight line
+                x = start[0] + dx * t
+                y = start[1] + dy * t
+
+                # Very slight offset (max 3 pixels)
+                offset = random.uniform(-3, 3)
+                x += perp_x * offset
+                y += perp_y * offset
+
+                points.append((x, y))
+
+        points.append(end)
         return points
+
+    def _initialize_particles(self):
+        """Initialize minimal particles along the beam path"""
+        # Main particles (very few)
+        num_particles = max(3, int(math.hypot(self.end[0] - self.start[0], self.end[1] - self.start[1]) / 50))
+
+        for i in range(num_particles):
+            t = i / num_particles
+            x = self.start[0] + (self.end[0] - self.start[0]) * t
+            y = self.start[1] + (self.end[1] - self.start[1]) * t
+
+            # Add minimal randomness
+            x += random.uniform(-4, 4)
+            y += random.uniform(-4, 4)
+
+            self._add_beam_particles(x, y)
+
+        # Small particles at endpoints
+        for _ in range(2):
+            self._add_beam_particles(
+                self.start[0] + random.uniform(-3, 3),
+                self.start[1] + random.uniform(-3, 3),
+                size_mult=1.2
+            )
+            self._add_beam_particles(
+                self.end[0] + random.uniform(-3, 3),
+                self.end[1] + random.uniform(-3, 3),
+                size_mult=1.2
+            )
+
+    def _add_beam_particles(self, x, y, size_mult=1.0):
+        """Add minimal particles at beam location"""
+        colors = self.primary_colors if random.random() < 0.7 else self.secondary_colors
+
+        # Just 1 particle per location
+        velocity = random.uniform(0.6, 2.0)
+
+        self.particles.append({
+            'pos': [x + random.uniform(-3, 3), y + random.uniform(-3, 3)],
+            'vel': [random.uniform(-0.8, 0.8) * velocity, random.uniform(-0.8, 0.8) * velocity],
+            'size': random.uniform(1.0, 2.5) * size_mult,
+            'life': random.uniform(0.15, 0.3),
+            'max_life': 0.3,
+            'color': random.choice(colors),
+            'pulse': random.random() < 0.3,
+            'alpha_mult': random.uniform(0.8, 1.0)
+        })
+
+    def update(self, dt):
+        """Update beam animation with streamlined dynamics"""
+        self.progress += dt / self.duration
+        self.time_elapsed += dt
+
+        # Update particles
+        for p in self.particles[:]:
+            # Apply velocity damping
+            p['vel'][0] *= 0.92
+            p['vel'][1] *= 0.92
+
+            # Update position
+            p['pos'][0] += p['vel'][0] * dt * 60
+            p['pos'][1] += p['vel'][1] * dt * 60
+
+            # Life decay
+            p['life'] -= dt
+            if p['life'] <= 0:
+                self.particles.remove(p)
+
+        # Generate new particles - minimal rate
+        if self.progress < 0.5:  # Shorter period
+            spawn_chance = 0.3 - self.progress * 0.5  # Reduced chance
+            if random.random() < spawn_chance:
+                # Place along straight line
+                t = random.random()
+                x = self.start[0] + (self.end[0] - self.start[0]) * t
+                y = self.start[1] + (self.end[1] - self.start[1]) * t
+
+                # Add particle
+                self._add_beam_particles(x, y)
+
+        # Check if complete
+        return self.progress < 1.0
+
+    def draw(self, screen):
+        """Draw the streamlined, straight beam effect"""
+        # Improved fade curve
+        fade_curve = 1.0 - max(0, (self.progress - 0.7) / 0.3) ** 2 if self.progress > 0.7 else 1.0
+        base_alpha = int(255 * fade_curve)
+
+        # Skip when nearly invisible
+        if base_alpha <= 5:
+            return
+
+        # Current time for animations
+        t = self.time_elapsed
+
+        # More subtle beam width pulsation
+        width_scale = 1.0 + 0.12 * math.sin(t * self.pulse_frequency)
+
+        # Draw the beam segments (now straight or nearly straight)
+        for i in range(len(self.beam_points) - 1):
+            start_pos = self.beam_points[i]
+            end_pos = self.beam_points[i + 1]
+
+            # Calculate segment properties
+            segment_t = i / max(1, len(self.beam_points) - 1)
+
+            # Minimal wave amplitude
+            wave_amplitude = math.sin(segment_t * math.pi) * 0.4 + 0.3
+
+            # Width modulation
+            segment_width = self.beam_width * width_scale
+            segment_width *= 1.0 + 0.1 * math.sin(
+                self.beam_frequency * segment_t + t * 8 + self.beam_phase
+            ) * wave_amplitude
+
+            # Alpha modulation
+            segment_alpha = base_alpha * (0.9 + 0.1 * math.sin(
+                self.beam_frequency * segment_t * 2 + t * 10
+            ))
+
+            # Determine colors
+            if self.color_scheme == "holy":
+                outer_glow = (255, 215, 0, int(segment_alpha * 0.2))
+                mid_glow = (255, 230, 100, int(segment_alpha * 0.4))
+                inner_core = (255, 255, 240, segment_alpha)
+            else:  # lightning
+                outer_glow = (30, 144, 255, int(segment_alpha * 0.2))
+                mid_glow = (100, 180, 255, int(segment_alpha * 0.4))
+                inner_core = (240, 248, 255, segment_alpha)
+
+            # Simplified color shifting
+            primary_idx = int(((math.sin(t * 5) + 1) / 2) * (len(self.primary_colors) - 0.01))
+            core_color = list(self.primary_colors[primary_idx]) + [int(segment_alpha)]
+
+            # Layer 1: Outer glow - reduced scale
+            pygame.draw.line(
+                screen,
+                outer_glow,
+                start_pos,
+                end_pos,
+                int(segment_width * 2.0)
+            )
+
+            # Layer 2: Mid glow
+            pygame.draw.line(
+                screen,
+                mid_glow,
+                start_pos,
+                end_pos,
+                int(segment_width * 1.3)
+            )
+
+            # Layer 3: Core beam
+            pygame.draw.line(
+                screen,
+                core_color,
+                start_pos,
+                end_pos,
+                int(segment_width)
+            )
+
+            # Layer 4: Inner core
+            pygame.draw.line(
+                screen,
+                inner_core,
+                start_pos,
+                end_pos,
+                max(1, int(segment_width * 0.4))
+            )
+
+        # Draw energy nodes - minimal
+        for node in self.energy_nodes:
+            # Subtle pulsating
+            node_pulse = 0.85 + 0.15 * math.sin(t * 10 + node['phase'])
+            node_size = node['size'] * segment_width * node_pulse
+
+            # Node color
+            if self.color_scheme == "holy":
+                node_color = (255, 255, 200, int(base_alpha * 0.8))
+            else:  # lightning
+                node_color = (200, 230, 255, int(base_alpha * 0.8))
+
+            # Draw node
+            pygame.draw.circle(
+                screen,
+                node_color,
+                (int(node['pos'][0]), int(node['pos'][1])),
+                int(node_size)
+            )
+
+            # Inner core
+            if self.color_scheme == "holy":
+                inner_node_color = (255, 255, 255, base_alpha)
+            else:
+                inner_node_color = (230, 240, 255, base_alpha)
+
+            pygame.draw.circle(
+                screen,
+                inner_node_color,
+                (int(node['pos'][0]), int(node['pos'][1])),
+                int(node_size * 0.4)
+            )
+
+        # Draw particles - minimal effects
+        for p in self.particles:
+            life_ratio = p['life'] / p['max_life']
+
+            # Subtle pulse effect
+            size_mod = 1.0
+            if p['pulse']:
+                size_mod = 0.85 + 0.25 * math.sin(t * 12 + hash(str(p['pos'])) % 10)
+
+            # Alpha calculation
+            p_alpha = int(255 * life_ratio * p['alpha_mult'])
+            p_color = (*p['color'], p_alpha)
+
+            # Minimal glow
+            if p_alpha > 150:  # Higher threshold
+                glow_size = p['size'] * 1.8 * size_mod
+                glow_surf = pygame.Surface((int(glow_size * 2), int(glow_size * 2)), pygame.SRCALPHA)
+                glow_color = (*p['color'], int(p_alpha * 0.2))
+                pygame.draw.circle(
+                    glow_surf,
+                    glow_color,
+                    (int(glow_size), int(glow_size)),
+                    int(glow_size)
+                )
+                screen.blit(
+                    glow_surf,
+                    (int(p['pos'][0] - glow_size), int(p['pos'][1] - glow_size))
+                )
+
+            # Main particle
+            pygame.draw.circle(
+                screen,
+                p_color,
+                (int(p['pos'][0]), int(p['pos'][1])),
+                int(p['size'] * life_ratio * size_mod)
+            )
+
+    def create_impact_particles(self, game, target, count=10):  # Reduced from 15
+        """Create minimal impact particles for a clean, compact effect"""
+        # Determine impact center
+        if hasattr(target, 'x') and hasattr(target, 'y'):
+            impact_center = (target.x * TILE_SIZE + TILE_SIZE // 2,
+                             target.y * TILE_SIZE + TILE_SIZE // 2)
+        else:
+            impact_center = target
+
+        # Colors
+        if self.color_scheme == "holy":
+            colors = self.primary_colors
+            explosion_color = (255, 215, 0)
+            core_color = (255, 255, 220)
+        else:  # lightning
+            colors = self.primary_colors
+            explosion_color = (30, 144, 255)
+            core_color = (200, 240, 255)
+
+        # Create single ring
+        game.fear_particles.append({
+            'pos': list(impact_center),
+            'vel': [0, 0],
+            'life': 0.3,
+            'max_life': 0.3,
+            'size': 15,
+            'color': explosion_color,
+            'is_ring': True,
+            'ring_width': 2,
+            'delay': 0
+        })
+
+        # Create flash
+        game.fear_particles.append({
+            'pos': list(impact_center),
+            'vel': [0, 0],
+            'life': 0.2,
+            'max_life': 0.2,
+            'size': 10,
+            'color': core_color,
+            'is_flash': True
+        })
+
+        # Add minimal particles
+        for _ in range(count):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(2.5, 10)
+            size = random.uniform(1.5, 3)
+            life = random.uniform(0.2, 0.7)
+
+            particle = {
+                'pos': [impact_center[0], impact_center[1]],
+                'vel': [math.cos(angle) * speed, math.sin(angle) * speed],
+                'life': life,
+                'max_life': life,
+                'size': size,
+                'color': random.choice(colors),
+                'gravity': 0,  # No gravity for cleaner effect
+                'rotation': None  # No rotation for simpler particles
+            }
+
+            game.fear_particles.append(particle)
+
+# --------------- 神圣守护 -----------------
+
+
+class SummonHolyBall:
+    def __init__(self, owner, ball_count=6, duration=20.0, attack_range=6, attack_speed=0.8,
+                 damage_multiple=1.2, heal_percent=0.05, is_monster_skill=False, target=None):
+        self.owner = owner  # 玩家或怪物
+        self.duration = duration  # 球体存在时间（秒）
+        self.lifetime = duration  # 剩余生命周期
+        self.attack_range = attack_range  # 攻击范围（格）
+        self.ball_count = ball_count  # 闪电球数量
+        self.heal_percent = heal_percent  # 治疗百分比
+        self.heal_timer = 0  # 治疗计时器
+
+        # 新增参数
+        self.is_monster_skill = is_monster_skill
+        self.target = target  # 怪物技能时为玩家
+
+        # 创建多个神圣球
+        self.holy_balls = []
+        for i in range(ball_count):
+            self.holy_balls.append(self.HolyBall(
+                owner,
+                orbit_angle=2 * math.pi * i / ball_count,  # 均匀分布在圆周上
+                orbit_speed=0.8 + random.uniform(-0.2, 0.2),  # 略微不同的轨道速度
+                attack_speed=attack_speed,
+                damage_multiple=damage_multiple,
+                is_monster_skill=is_monster_skill
+            ))
+
+    def update(self, dt, game):
+        # 更新生命周期
+        self.lifetime -= dt
+        if self.lifetime <= 0:
+            # 生成消散特效
+            for ball in self.holy_balls:
+                for _ in range(10):  # 每个球生成10个粒子
+                    game.fear_particles.append({
+                        'pos': list(ball.position),
+                        'vel': [random.uniform(-8, 8), random.uniform(-8, 8)],
+                        'life': random.uniform(0.5, 1.2),
+                        'max_life': 1.2,
+                        'size': random.uniform(2, 5),
+                        'color': (255, 215, 0)
+                    })
+            return False  # 生命周期结束，移除所有球体
+
+        # 根据释放者类型决定行为
+        if self.is_monster_skill:
+            # 怪物技能：攻击玩家，不治疗怪物
+            self.update_monster_skill(dt, game)
+        else:
+            # 玩家技能：攻击怪物，治疗玩家
+            self.update_player_skill(dt, game)
+
+        return True  # 继续存在
+
+    def update_monster_skill(self, dt, game):
+        # 检查玩家是否在攻击范围内
+        player = self.target
+        distance = game.calculate_distance(
+            (player.x, player.y),
+            (self.owner.x + 1, self.owner.y + 1)  # 怪物中心位置
+        )
+
+        # 如果玩家在范围内，造成伤害
+        if distance <= self.attack_range:
+            # 每秒造成一次伤害
+            self.heal_timer += dt
+            if self.heal_timer >= 1.0:
+                # 计算伤害
+                damage = self.owner.atk * 0.8
+                actual_damage = max(damage - player.defense, 0)
+                player.hp -= actual_damage
+                game.add_message(f"神圣光环造成 {actual_damage} 点伤害！")
+
+                # 重置计时器
+                self.heal_timer = 0
+
+                # 添加受击特效
+                game.fear_particles.append({
+                    'pos': [player.x * TILE_SIZE + TILE_SIZE // 2,
+                            player.y * TILE_SIZE + TILE_SIZE // 2],
+                    'vel': [random.uniform(-3, 3), random.uniform(-5, -2)],
+                    'life': 0.8,
+                    'max_life': 0.8,
+                    'size': 3,
+                    'color': (255, 255, 200)
+                })
+
+        # 更新所有球体
+        for ball in self.holy_balls:
+            ball.update(dt, game)
+
+        # 让神圣球也攻击玩家 - 关键修复
+        if player:
+            for ball in self.holy_balls:
+                if ball.attack_cooldown <= 0:
+                    distance = game.calculate_distance(
+                        (player.x, player.y),
+                        (int(ball.position[0] / TILE_SIZE), int(ball.position[1] / TILE_SIZE))
+                    )
+                    if distance <= self.attack_range:
+                        ball.try_attack_player(player, game)
+
+    def update_player_skill(self, dt, game):
+        # 治疗玩家
+        self.heal_timer += dt
+        if self.heal_timer >= 1.0:  # 每秒治疗一次
+            heal_amount = min(200, int(game.player.hp * self.heal_percent))
+            game.player.hp = min(game.player.hp + heal_amount, game.player.max_hp)
+            game.add_message(f"神圣光球恢复 {heal_amount} 点生命值!")
+            self.heal_timer = 0
+
+        # 更新所有球体
+        for ball in self.holy_balls:
+            ball.update(dt, game)
+
+        # 寻找范围内的目标
+        targets = []
+        for monster in game.monsters:
+            distance = game.calculate_distance(
+                (game.player.x, game.player.y),
+                (monster.x, monster.y)
+            )
+            if distance <= self.attack_range:
+                targets.append(monster)
+
+        # 每个球体尝试攻击目标
+        if targets:
+            for ball in self.holy_balls:
+                ball.try_attack(targets, game)
+
+    def draw(self, screen):
+        # 如果是怪物技能，绘制攻击范围指示
+        if self.is_monster_skill:
+            # 获取怪物中心位置
+            center_x = self.owner.x * TILE_SIZE + TILE_SIZE * 1.5  # 假设3x3怪物
+            center_y = self.owner.y * TILE_SIZE + TILE_SIZE * 1.5
+
+            # 绘制攻击范围指示
+            range_radius = self.attack_range * TILE_SIZE
+            range_surf = pygame.Surface((int(range_radius * 2), int(range_radius * 2)), pygame.SRCALPHA)
+            pygame.draw.circle(range_surf, (255, 255, 200, 15),
+                               (int(range_radius), int(range_radius)),
+                               int(range_radius))
+            screen.blit(range_surf,
+                        (center_x - range_radius, center_y - range_radius))
+
+        # 绘制所有球体
+        for ball in self.holy_balls:
+            ball.draw(screen)
+
+    # 内部类: 单个神圣球
+    class HolyBall:
+        def __init__(self, owner, orbit_angle=0, orbit_speed=1.0, attack_speed=0.8,
+                     damage_multiple=1.5, is_monster_skill=False):
+            self.owner = owner
+            self.is_monster_skill = is_monster_skill
+
+            # 轨道参数
+            self.orbit_radius = TILE_SIZE * 2.0  # 环绕距离
+            self.orbit_angle = orbit_angle  # 初始角度
+            self.orbit_speed = orbit_speed  # 轨道速度（弧度/秒）
+
+            # 攻击参数
+            self.attack_speed = attack_speed  # 每秒攻击次数
+            self.attack_cooldown = random.uniform(0, 1.0 / attack_speed)  # 随机初始冷却
+            self.damage_multiple = damage_multiple  # 伤害倍率
+
+            # 位置为拥有者位置的偏移
+            if is_monster_skill:
+                # 怪物是3x3的，中心位置不同
+                owner_pos = (owner.x * TILE_SIZE + TILE_SIZE * 1.5,
+                             owner.y * TILE_SIZE + TILE_SIZE * 1.5)
+            else:
+                # 玩家是1x1的
+                owner_pos = (owner.x * TILE_SIZE + TILE_SIZE // 2,
+                             owner.y * TILE_SIZE + TILE_SIZE // 2)
+
+            self.position = [
+                owner_pos[0] + math.cos(orbit_angle) * self.orbit_radius,
+                owner_pos[1] + math.sin(orbit_angle) * self.orbit_radius
+            ]
+
+            # 视觉参数
+            self.size = 11  # 球体基础尺寸
+            self.light_rays = []  # 光线连接点
+
+        def update(self, dt, game):
+            # 更新轨道位置
+            self.orbit_angle += self.orbit_speed * dt
+
+            if self.is_monster_skill:
+                # 怪物中心位置
+                owner_center = (self.owner.x * TILE_SIZE + TILE_SIZE * 1.5,
+                                self.owner.y * TILE_SIZE + TILE_SIZE * 1.5)
+            else:
+                # 玩家中心位置
+                owner_center = (game.player.x * TILE_SIZE + TILE_SIZE // 2,
+                                game.player.y * TILE_SIZE + TILE_SIZE // 2)
+
+            self.position = [
+                owner_center[0] + math.cos(self.orbit_angle) * self.orbit_radius,
+                owner_center[1] + math.sin(self.orbit_angle) * self.orbit_radius
+            ]
+
+            # 更新攻击冷却
+            if self.attack_cooldown > 0:
+                self.attack_cooldown -= dt
+
+            # 动态更新光线连接点
+            if random.random() < 0.15 or not self.light_rays:
+                self.light_rays = []
+                connection_count = random.randint(2, 3)
+                for _ in range(connection_count):
+                    angle = random.uniform(0, 2 * math.pi)
+                    distance = random.uniform(self.size * 1.2, self.size * 2)
+                    self.light_rays.append({
+                        'pos': [
+                            self.position[0] + math.cos(angle) * distance,
+                            self.position[1] + math.sin(angle) * distance
+                        ],
+                        'life': random.uniform(0.2, 0.4)
+                    })
+
+            # 更新连接点生命周期
+            for conn in self.light_rays[:]:
+                conn['life'] -= dt
+                if conn['life'] <= 0:
+                    self.light_rays.remove(conn)
+
+        def try_attack_player(self, player, game):
+            """针对怪物控制的神圣球攻击玩家的方法"""
+            if self.attack_cooldown > 0:
+                return
+
+            # 计算伤害（带随机波动）
+            base_damage = self.owner.atk * self.damage_multiple
+            damage_variation = random.uniform(0.8, 1.2)
+            damage = base_damage * damage_variation
+            actual_damage = max(damage - player.defense, 0)
+
+            # 应用伤害
+            player.hp -= actual_damage
+
+            # 添加神圣光束效果
+            start_pos = list(self.position)
+            # 光束起点小幅度随机偏移
+            start_jitter = [random.uniform(-5, 5), random.uniform(-5, 5)]
+            start_pos[0] += start_jitter[0]
+            start_pos[1] += start_jitter[1]
+
+            # 光束终点为玩家位置（也带随机偏移）
+            end_pos = [player.x * TILE_SIZE + TILE_SIZE // 2,
+                       player.y * TILE_SIZE + TILE_SIZE // 2]
+            end_jitter = [random.uniform(-5, 5), random.uniform(-5, 5)]
+            end_pos[0] += end_jitter[0]
+            end_pos[1] += end_jitter[1]
+
+            # 创建神圣光束效果
+            holy_beam = HolyBeamEffect(
+                start=tuple(start_pos),
+                end=tuple(end_pos),
+                duration=0.4,
+                color_scheme="holy",
+                damage=actual_damage
+            )
+            game.skill_effects.append(holy_beam)
+
+            # 创建冲击效果
+            holy_beam.create_impact_particles(game, player)
+
+            game.add_message(f"敌方神圣光球对你造成{int(actual_damage)}点伤害!")
+            self.attack_cooldown = 1.0 / self.attack_speed  # 设置冷却时间
+
+        def try_attack(self, targets, game):
+            """玩家控制的神圣球攻击怪物的方法"""
+            # 如果是怪物技能，不应该在这里调用
+            if self.is_monster_skill:
+                return
+
+            # 如果有攻击冷却，不攻击
+            if self.attack_cooldown > 0 or not targets:
+                return
+
+            # 选择一个随机目标攻击
+            target = random.choice(targets)
+
+            # 计算伤害（带随机波动）
+            base_damage = game.player.atk * self.damage_multiple
+            damage_variation = random.uniform(0.8, 1.2)
+            damage = base_damage * damage_variation
+            actual_damage = max(damage - target.defense, 0)
+
+            # 应用伤害
+            target.hp -= actual_damage
+
+            # 添加神圣光束效果
+            start_pos = list(self.position)
+            # 光束起点小幅度随机偏移
+            start_jitter = [random.uniform(-5, 5), random.uniform(-5, 5)]
+            start_pos[0] += start_jitter[0]
+            start_pos[1] += start_jitter[1]
+
+            # 光束终点为怪物位置（也带随机偏移）
+            end_pos = [target.x * TILE_SIZE + TILE_SIZE // 2,
+                       target.y * TILE_SIZE + TILE_SIZE // 2]
+            end_jitter = [random.uniform(-5, 5), random.uniform(-5, 5)]
+            end_pos[0] += end_jitter[0]
+            end_pos[1] += end_jitter[1]
+
+            # 创建神圣光束效果
+            holy_beam = HolyBeamEffect(
+                start=tuple(start_pos),
+                end=tuple(end_pos),
+                duration=0.4,
+                color_scheme="holy",
+                damage=actual_damage
+            )
+            game.skill_effects.append(holy_beam)
+
+            # 创建冲击效果
+            holy_beam.create_impact_particles(game, target)
+
+            game.add_message(f"神圣光球对{target.name}造成{int(actual_damage)}点伤害!")
+            self.attack_cooldown = 1.0 / self.attack_speed  # 设置冷却时间
+
+        def draw(self, screen):
+            anim_time = pygame.time.get_ticks()
+
+            # 球体核心脉动效果
+            pulse = 0.5 + 0.5 * math.sin(anim_time / 200 + self.orbit_angle)
+            core_radius = int(self.size * (1 + 0.2 * pulse))
+
+            # 绘制多层递减透明度的核心
+            for i in range(3):
+                alpha = 200 - i * 50
+                radius = core_radius - i * 2
+
+                if radius <= 0:
+                    continue
+
+                temp_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+
+                # 根据技能类型选择颜色
+                if self.is_monster_skill:
+                    color = (255, 215, 0, alpha)  # 怪物技能偏金色
+                else:
+                    color = (0, 191, 255, alpha) if i % 2 == 0 else (100, 180, 255, alpha)
+
+                pygame.draw.circle(temp_surf, color, (radius, radius), radius)
+                screen.blit(temp_surf, (int(self.position[0] - radius), int(self.position[1] - radius)))
+
+            # 绘制光线连接
+            for conn in self.light_rays:
+                # 绘制从球心到连接点的光线
+                life_ratio = conn['life'] / 0.4  # 假设最大生命周期为0.4
+
+                # 生成光线路径点
+                points = []
+                # 起点为球心
+                points.append(tuple(self.position))
+
+                # 生成中间随机点
+                segments = random.randint(1, 3)
+                for i in range(segments):
+                    t = (i + 1) / (segments + 1)
+                    mid_x = self.position[0] + (conn['pos'][0] - self.position[0]) * t
+                    mid_y = self.position[1] + (conn['pos'][1] - self.position[1]) * t
+
+                    # 添加随机偏移
+                    jitter_range = 8 * (1 - t) * life_ratio
+                    jitter_x = random.uniform(-jitter_range, jitter_range)
+                    jitter_y = random.uniform(-jitter_range, jitter_range)
+
+                    points.append((mid_x + jitter_x, mid_y + jitter_y))
+
+                # 终点为连接点
+                points.append(tuple(conn['pos']))
+
+                # 绘制光线段
+                for i in range(len(points) - 1):
+                    # 根据释放者选择不同颜色
+                    if self.is_monster_skill:
+                        line_color = (255, 215, 0, int(255 * life_ratio))  # 金色
+                    else:
+                        line_color = (150, 220, 255, int(255 * life_ratio))  # 蓝色
+
+                    pygame.draw.line(screen, line_color, points[i], points[i + 1],
+                                     max(1, int(3 * life_ratio)))
+
 
 # ---------------- 魔王重锤眩晕 --------------------
 class CrackEffect:
@@ -1932,85 +4369,6 @@ class Item:
         self.item_type = item_type # 物品类前缀名，如 “GEM”， “WOOD_SWORD”
         self.equipment_data = equipment_data  # 存储装备数据
 
-
-# -------------------------- 商店界面 -------------------------
-def shop_screen(screen, player, floor):
-    # 使用半透明遮罩层实现模态对话框效果
-    font = pygame.font.SysFont("Arial", 24)
-    clock = pygame.time.Clock()
-    running = True
-
-    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 128))  # 半透明黑色背景
-
-    shop_window = pygame.Surface((400, 380))
-    shop_rect = shop_window.get_rect(center=screen.get_rect().center)
-    while running:
-        clock.tick(15)
-
-        # 绘制背景遮罩
-        # screen.blit(overlay, (0, 0))
-        # 将商店窗口居中显示
-        screen.blit(shop_window, shop_rect.topleft)
-        pygame.display.flip()
-
-        # 绘制商店窗口
-        shop_window.fill((50, 50, 50))
-        title = font.render("[Game Shop]", True, COLOR_TEXT)
-        shop_window.blit(title, (20, 20))
-        # 显示商店选项
-        option1 = font.render(f"1. HP +{1000 * floor} (Costs {100 * floor} Coin)", True, COLOR_TEXT)
-        option2 = font.render(f"2. ATK +{5 * floor} (Costs {100 * floor} Coin)", True, COLOR_TEXT)
-        option3 = font.render(f"3. DEF +{5 * floor} (Costs {100 * floor} Coin)", True, COLOR_TEXT)
-        option4 = font.render(f"4. HP +{10000 * floor} (Costs {1000 * floor} Coin)", True, COLOR_TEXT)
-        option5 = font.render(f"5. ATK +{50 * floor} (Costs {1000 * floor} Coin)", True, COLOR_TEXT)
-        option6 = font.render(f"6. DEF +{50 * floor} (Costs {1000 * floor} Coin)", True, COLOR_TEXT)
-        shop_window.blit(option1, (20, 60))
-        shop_window.blit(option2, (20, 100))
-        shop_window.blit(option3, (20, 140))
-        shop_window.blit(option4, (20, 180))
-        shop_window.blit(option5, (20, 220))
-        shop_window.blit(option6, (20, 260))
-        info = font.render(f"Current Coin: [{player.coins}]", True, (255, 255, 0))
-        shop_window.blit(info, (20, 300))
-        prompt = font.render("Press Number Button Buy, Press ESC Exit", True, COLOR_TEXT)
-        shop_window.blit(prompt, (20, 340))
-        pygame.display.flip()
-
-        # s商店选项
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
-                elif event.key == pygame.K_1:
-                    if player.coins >= 100 * floor:
-                        player.hp = min(player.hp + 1000 * floor, player.max_hp)
-                        player.coins -= 100 * floor
-                elif event.key == pygame.K_2:
-                    if player.coins >= 100 * floor:
-                        player.base_atk += 5 * floor
-                        player.coins -= 100 * floor
-                elif event.key == pygame.K_3:
-                    if player.coins >= 100 * floor:
-                        player.base_defense += 5 * floor
-                        player.coins -= 100 * floor
-                elif event.key == pygame.K_4:
-                    if player.coins >= 1000 * floor:
-                        player.hp = min(player.hp + 10000 * floor, player.max_hp)
-                        player.coins -= 1000 * floor
-                elif event.key == pygame.K_5:
-                    if player.coins >= 1000 * floor:
-                        player.base_atk += 50 * floor
-                        player.coins -= 1000 * floor
-                elif event.key == pygame.K_6:
-                    if player.coins >= 1000 * floor:
-                        player.base_defense += 50 * floor
-                        player.coins -= 1000 * floor
-
-
 # -------- 迷宫生成函数 --------
 def generate_maze(width=CONFIG["MAP_WIDTH"], height=CONFIG["MAP_HEIGHT"]):
     maze = [[1 for _ in range(width)] for _ in range(height)]
@@ -2124,6 +4482,7 @@ class Game:
         self.side_panel = pygame.Surface((SIDEBAR_WIDTH, SCREEN_HEIGHT))
 
         self.nearby_monsters = []  # 存储附近怪物的列表
+        self.guardian_lightning_balls = []  # 存储守护闪电球
 
         # 游戏状态管理
         self.game_state = "menu"  # menu/playing/dead
@@ -2168,13 +4527,13 @@ class Game:
             else:
                 self.lightning_path_blue = False
 
-
     def clear_dynamic(self):
         self.fear_particles = []
         self.lightning_balls = []  # 存储闪电位置
         self.corrosion_effects = []  # 存储腐蚀痕迹数据
         self.player_debuff['in_corrosion'] = False  # 玩家是否在腐蚀区域
         self.skill_effects = []  # 存储所有技能特效
+        self.guardian_lightning_balls = []  # 守护闪电球列表
         self.fountain_room = None
         self.lava_room = None
 
@@ -2290,8 +4649,8 @@ class Game:
             self.add_message(f"{skill['name']}冷却中!")
             return
 
-        # 火球术（Q技能）
-        if skill_key == 'Q':
+        # 火焰重击
+        if skill_key == 'FireStrikeEffect':
             # 寻找有效目标
             targets = [
                 m for m in self.monsters
@@ -2322,8 +4681,8 @@ class Game:
 
             self.skill_effects.append(effect)
 
-        # 闪电链（R技能）
-        elif skill_key == 'E':
+        # 闪电链
+        elif skill_key == 'LightningEffect':
             # 获取范围内最近的3个目标
             targets = []
             for m in self.monsters:
@@ -2379,9 +4738,8 @@ class Game:
 
             self.add_message(f"闪电链造成总计{total_damage}点伤害！")
 
-        elif skill_key == 'R':
-            # Create holy balls effect
-            effect = HollyBallEffect(
+        elif skill_key == 'HolyBallEffect':
+            effect = HolyBallEffect(
                 player_pos=(self.player.x, self.player.y),
                 ball_count=skill['ball_count'],
                 seek_range=skill['seek_range'],
@@ -2390,7 +4748,7 @@ class Game:
             self.skill_effects.append(effect)
             self.add_message(f"释放{skill['name']}!")
 
-        elif skill_key == 'T':
+        elif skill_key == 'TripleAttack':
             effect = TripleAttack(
                 player_pos=(self.player.x, self.player.y),
                 attack_range=skill['range'],
@@ -2399,9 +4757,343 @@ class Game:
             self.skill_effects.append(effect)
             self.add_message(f"释放{skill['name']}!")
 
+        elif skill_key == 'SummonLightningBall':
+            # 创建守护闪电球
+            lightning_ball = SummonLightningBall(
+                self.player,
+                ball_count=skill['ball_count'],
+                duration=skill['duration'],
+                attack_range=skill['attack_range'],
+                attack_speed=skill['attack_speed'],
+                damage_multiple=skill['damage_multiple']
+            )
+            self.guardian_lightning_balls.append(lightning_ball)
+
+            self.add_message(f"释放{skill['name']}!")
+
+        elif skill_key == 'SummonHolyBall':
+            # Create holy balls effect
+            holy_ball = SummonHolyBall(
+                self.player,
+                ball_count=skill['ball_count'],
+                duration=skill['duration'],
+                attack_range=skill['attack_range'],
+                attack_speed=skill['attack_speed'],
+                damage_multiple=skill['damage_multiple'],
+                heal_percent=skill['heal_percent']
+            )
+            self.guardian_lightning_balls.append(holy_ball)
+            self.add_message(f"释放{skill['name']}!")
+
         skill['current_cd'] = skill['cooldown']
 
     # --------------- 游戏怪物绘制 -----------------
+
+    # 怪物追踪状态指示
+    def draw_monster_tracking_indicators(self):
+        """绘制怪物的追踪状态指示器"""
+        if not MONSTER_TRACKING_INDICATORS:
+            return
+
+        for monster in self.monsters:
+            if monster.is_tracking:
+                # 绘制追踪指示器
+                x = monster.x * TILE_SIZE + TILE_SIZE // 2
+                y = monster.y * TILE_SIZE - 10
+                radius = 4
+
+                # 绘制感叹号
+                pygame.draw.circle(self.screen, (255, 0, 0), (x, y), radius + 2)
+                pygame.draw.circle(self.screen, (255, 255, 255), (x, y), radius)
+
+                # 感叹号竖线
+                pygame.draw.line(self.screen, (255, 0, 0), (x, y - 3), (x, y + 1), 2)
+                # 感叹号点
+                pygame.draw.circle(self.screen, (255, 0, 0), (x, y + 3), 1)
+
+                # 如果有路径且允许路径可视化，绘制路径点
+                if MONSTER_PATH_VISUALIZATION and monster.path_to_player and len(monster.path_to_player) > 1:
+                    # 只绘制部分路径点，避免过度绘制
+                    path_points = monster.path_to_player[1:min(len(monster.path_to_player), 6)]
+
+                    # 绘制怪物到第一个路径点的线
+                    pygame.draw.line(self.screen, (255, 0, 0, 80),
+                                     (monster.x * TILE_SIZE + TILE_SIZE // 2, monster.y * TILE_SIZE + TILE_SIZE // 2),
+                                     (path_points[0][0] * TILE_SIZE + TILE_SIZE // 2,
+                                      path_points[0][1] * TILE_SIZE + TILE_SIZE // 2),
+                                     1)
+
+                    # 绘制路径点之间的线
+                    for i in range(len(path_points) - 1):
+                        start = (path_points[i][0] * TILE_SIZE + TILE_SIZE // 2,
+                                 path_points[i][1] * TILE_SIZE + TILE_SIZE // 2)
+                        end = (path_points[i + 1][0] * TILE_SIZE + TILE_SIZE // 2,
+                               path_points[i + 1][1] * TILE_SIZE + TILE_SIZE // 2)
+
+                        # 使用半透明红色
+                        pygame.draw.line(self.screen, (255, 0, 0, 50), start, end, 1)
+
+                    # 绘制路径点
+                    for point in path_points:
+                        pygame.draw.circle(self.screen, (255, 150, 150, 120),
+                                           (point[0] * TILE_SIZE + TILE_SIZE // 2,
+                                            point[1] * TILE_SIZE + TILE_SIZE // 2),
+                                           2)
+
+            # 调试信息
+            if MONSTER_DEBUG_INFO:
+                # 显示怪物状态信息
+                debug_y = monster.y * TILE_SIZE - 25
+                debug_x = monster.x * TILE_SIZE
+
+                # 状态文本
+                status = "追踪中" if monster.is_tracking else "游荡中"
+                status_surf = pygame.font.SysFont("SimHei", 12).render(status, True, (255, 255, 255))
+                status_rect = status_surf.get_rect(center=(debug_x + TILE_SIZE // 2, debug_y))
+
+                # 背景矩形
+                bg_rect = status_rect.inflate(10, 5)
+                pygame.draw.rect(self.screen, (0, 0, 0, 150), bg_rect)
+                self.screen.blit(status_surf, status_rect)
+
+                # 额外显示超时计时
+                if monster.is_tracking:
+                    timeout_text = f"{monster.tracking_timeout:.1f}/{monster.tracking_duration:.1f}"
+                    timeout_surf = pygame.font.SysFont("Arial", 10).render(timeout_text, True, (255, 200, 200))
+                    self.screen.blit(timeout_surf, (debug_x, debug_y - 15))
+
+    def update_monsters(self, dt):
+        """更新所有怪物的状态和位置"""
+        for monster in self.monsters[:]:
+            # 为怪物添加必要的属性，如果没有
+            if not hasattr(monster, 'message_cooldown'):
+                monster.message_cooldown = 0  # 消息冷却时间
+                monster.detection_cooldown = 0  # 检测冷却时间
+                monster.detection_interval = 1.0  # 每1秒检测一次玩家位置
+
+            # 更新消息和检测冷却
+            monster.message_cooldown = max(0, monster.message_cooldown - dt)
+            monster.detection_cooldown = max(0, monster.detection_cooldown - dt)
+
+            # 更新移动计数器
+            monster.move_counter += dt * 60  # 累积时间，保持原单位
+
+            # 更新追踪超时
+            if monster.is_tracking:
+                # 检查玩家是否仍在追踪范围内
+                distance = self.calculate_distance((monster.x, monster.y), (self.player.x, self.player.y))
+
+                if distance <= MONSTER_DISTANCE:
+                    # 重置追踪超时
+                    monster.tracking_timeout = 0
+                else:
+                    # 增加超时时间
+                    monster.tracking_timeout += dt * 60
+
+                    # 超过持续时间，停止追踪
+                    if monster.tracking_timeout >= monster.tracking_duration:
+                        monster.is_tracking = False
+                        monster.path_to_player = []
+                        monster.wander_direction = None
+                        monster.wander_steps = 0
+                        # 只有当消息冷却结束时才发送追踪丢失消息
+                        if monster.message_cooldown <= 0:
+                            self.add_message(f"{monster.name}失去了你的踪迹！")
+                            monster.message_cooldown = 10.0  # 10秒内不再发送此类消息
+
+            # 更新路径 - 使用秒为单位
+            if monster.is_tracking:
+                monster.path_update_cooldown -= dt * 60
+                if monster.path_update_cooldown <= 0:
+                    # 更新到玩家的路径
+                    monster.path_to_player = self.find_path_for_monster(monster, (self.player.x, self.player.y))
+                    monster.path_update_cooldown = monster.path_update_rate
+
+                    # 如果找不到路径，停止追踪
+                    if not monster.path_to_player:
+                        monster.is_tracking = False
+                        monster.wander_direction = None
+                        monster.wander_steps = 0
+
+            # 定期检查玩家位置，而不是每帧都检查
+            if monster.detection_cooldown <= 0:
+                # 重置检测冷却
+                monster.detection_cooldown = monster.detection_interval
+
+                # 检查是否应该开始追踪
+                if not monster.is_tracking:
+                    distance = self.calculate_distance((monster.x, monster.y), (self.player.x, self.player.y))
+                    if distance <= MONSTER_DISTANCE:
+                        # 开始追踪
+                        monster.is_tracking = True
+                        monster.tracking_timeout = 0
+                        monster.path_update_cooldown = 0  # 立即更新路径
+                        monster.wander_direction = None
+
+                        # 添加消息（只有当消息冷却结束时）
+                        if monster.message_cooldown <= 0:
+                            self.add_message(f"{monster.name}发现了你！")
+                            monster.message_cooldown = 8.0  # 8秒内不再发送发现消息
+
+            # 移动逻辑 - 当移动计数器达到怪物速度参数时移动
+            if monster.move_counter >= monster.speed:
+                # 重置移动计数器
+                monster.move_counter = 0
+
+                # 保存当前位置以检测卡住
+                current_pos = (monster.x, monster.y)
+
+                # 根据追踪状态决定移动逻辑
+                if monster.is_tracking and monster.path_to_player:
+                    # 追踪模式：按路径移动
+                    self.move_monster_along_path(monster)
+                else:
+                    # 游荡模式：随机移动
+                    self.move_monster_randomly(monster)
+
+                # 检测怪物是否卡住
+                if current_pos == (monster.x, monster.y):
+                    monster.stuck_counter += 1
+
+                    # 如果连续卡住多次，重置移动状态
+                    if monster.stuck_counter >= 3:
+                        monster.stuck_counter = 0
+                        monster.is_tracking = False
+                        monster.path_to_player = []
+                        monster.wander_direction = None
+                        monster.wander_steps = 0
+                else:
+                    monster.stuck_counter = 0
+                    monster.last_pos = current_pos
+
+    def find_path_for_monster(self, monster, target):
+        """为怪物寻找到目标的路径，考虑怪物尺寸"""
+        # 获取怪物尺寸
+        size_x, size_y = monster.size
+
+        # 怪物的起始位置
+        start = (monster.x, monster.y)
+
+        # 不直接寻路到玩家位置，而是找到玩家附近的可到达点
+        # 这样怪物不会尝试与玩家重叠
+        nearby_tiles = []
+
+        # 检查玩家周围的格子
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                # 跳过玩家自己的位置
+                if dx == 0 and dy == 0:
+                    continue
+
+                # 计算相邻格子
+                nearby_x = target[0] + dx
+                nearby_y = target[1] + dy
+
+                # 检查是否可通行
+                if self.can_monster_move_to(monster, nearby_x, nearby_y):
+                    # 计算到玩家的曼哈顿距离
+                    distance = abs(nearby_x - target[0]) + abs(nearby_y - target[1])
+                    nearby_tiles.append((distance, (nearby_x, nearby_y)))
+
+        # 如果没有找到可到达的相邻格子，直接返回空路径
+        if not nearby_tiles:
+            return []
+
+        # 按距离排序，优先选择离玩家最近的格子
+        nearby_tiles.sort()
+        target_pos = nearby_tiles[0][1]
+
+        # 使用 BFS 寻找路径
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # 上下左右
+        queue = deque([start])
+        visited = {start: None}  # 记录访问过的节点及其父节点
+
+        # 获取所有怪物位置（排除自己）
+        monster_positions = set()
+        for m in self.monsters:
+            if m is not monster:  # 排除自己
+                for dx in range(m.size[0]):
+                    for dy in range(m.size[1]):
+                        monster_positions.add((m.x + dx, m.y + dy))
+
+        while queue:
+            current = queue.popleft()
+            if current == target_pos:
+                # 重建路径
+                path = []
+                while current is not None:
+                    path.append(current)
+                    current = visited[current]
+                return path[::-1]  # 反转路径
+
+            for dx, dy in directions:
+                next_pos = (current[0] + dx, current[1] + dy)
+
+                # 检查该位置是否适合怪物移动
+                if self.can_monster_move_to(monster, next_pos[0], next_pos[1]) and next_pos not in visited:
+                    queue.append(next_pos)
+                    visited[next_pos] = current
+
+        # 没有找到路径
+        return []
+
+    def move_monster_along_path(self, monster):
+        """沿路径移动怪物"""
+        if not monster.path_to_player or len(monster.path_to_player) < 2:
+            # 路径为空或只有起点，无法移动
+            return
+
+        # 获取下一个位置（路径中的第二个点，因为第一个是当前位置）
+        next_pos = monster.path_to_player[1]
+
+        # 检查下一位置是否仍然可通行
+        if self.can_monster_move_to(monster, next_pos[0], next_pos[1]):
+            # 移动到下一个位置 - 不需要考虑速度，因为这个函数只在计数器达到阈值时调用
+            monster.x = next_pos[0]
+            monster.y = next_pos[1]
+
+            # 更新路径（移除已经到达的点）
+            monster.path_to_player.pop(0)
+        else:
+            # 如果下一个位置不可通行，重新计算路径
+            monster.path_update_cooldown = 0  # 触发路径重新计算
+            monster.path_to_player = []  # 清空当前路径
+
+    def move_monster_randomly(self, monster):
+        """随机移动怪物"""
+        # 如果没有当前方向或者已经走完步数，选择新方向
+        if monster.wander_direction is None or monster.wander_steps <= 0:
+            # 随机选择方向
+            directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # 上下左右
+            random.shuffle(directions)
+
+            # 尝试每个方向
+            for dx, dy in directions:
+                new_x = monster.x + dx
+                new_y = monster.y + dy
+
+                if self.can_monster_move_to(monster, new_x, new_y):
+                    monster.wander_direction = (dx, dy)
+                    monster.wander_steps = random.randint(1, 3)  # 随机步数
+                    break
+
+            # 如果所有方向都不可行，保持原地
+            if monster.wander_direction is None:
+                return
+
+        # 按当前方向移动
+        dx, dy = monster.wander_direction
+        new_x = monster.x + dx
+        new_y = monster.y + dy
+
+        if self.can_monster_move_to(monster, new_x, new_y):
+            monster.x = new_x
+            monster.y = new_y
+            monster.wander_steps -= 1
+        else:
+            # 如果当前方向不可行，重置方向
+            monster.wander_direction = None
+            monster.wander_steps = 0
 
     def color_reverse(self, color):
         return (255 - color[0], 255 - color[0], 255 - color[0])
@@ -3318,6 +6010,282 @@ class Game:
             pygame.draw.circle(self.screen, (175, 238, 238, 80), (fx, fy), frost_radius // 2)
             pygame.draw.circle(self.screen, (240, 255, 255, 120), (fx, fy), frost_radius // 4)
 
+    # ----------------- 神圣骑士绘制 -------------------
+
+    def draw_holy_knight(self, monster):
+        x = monster.x * TILE_SIZE
+        y = monster.y * TILE_SIZE
+        w = monster.size[0] * TILE_SIZE
+        h = monster.size[1] * TILE_SIZE
+
+        # 动画参数和时间
+        anim_time = pygame.time.get_ticks()
+
+        # 整体缩放因子 (调整这个值来控制整体大小)
+        scale_factor = 0.7
+
+        # ----- 背景光晕效果 (按比例缩小) -----
+
+        # 更紧凑的光晕区域
+        glow_radius = int((w * 0.8 + 20 + int(15 * math.sin(anim_time / 400))) * scale_factor * 0.45)
+        glow_surface = pygame.Surface((glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
+
+        # 多层渐变光晕
+        for i in range(5):
+            alpha = 110 - i * 18  # 略微降低透明度
+            s_scale = 1 - (i * 0.15)
+            color = (255, 255, 200, alpha)
+            pygame.draw.circle(glow_surface, color,
+                               (glow_radius, glow_radius),
+                               int(glow_radius * s_scale))
+
+        # 绘制脉动的光晕波纹
+        pulse_scale = 0.6 + 0.4 * math.sin(anim_time / 300)
+        outer_glow = pygame.Surface((int(glow_radius * 2.2), int(glow_radius * 2.2)), pygame.SRCALPHA)
+        pygame.draw.circle(outer_glow, (255, 255, 200, 40),
+                           (int(glow_radius * 1.1), int(glow_radius * 1.1)),
+                           int(glow_radius * pulse_scale * 1.2))
+
+        # 绘制光晕到屏幕
+        glow_center = (x + w // 2, y + h // 2)
+        self.screen.blit(outer_glow,
+                         (glow_center[0] - int(glow_radius * 1.1),
+                          glow_center[1] - int(glow_radius * 1.1)))
+        self.screen.blit(glow_surface,
+                         (glow_center[0] - glow_radius,
+                          glow_center[1] - glow_radius))
+
+        # ----- 核心菱形特效 (按比例缩小) -----
+
+        # 菱形核心尺寸
+        core_size = int((w // 4) * scale_factor)  # 按比例缩小核心
+        core_center = (x + w // 2, y + h // 2)
+
+        # 强烈脉冲光效果
+        pulse_intensity = 0.6 + 0.4 * abs(math.sin(anim_time / 150))
+        for i in range(4):
+            pulse_radius = (core_size // 2) * (1 + i * 0.9) * pulse_intensity
+            pulse_alpha = int(180 * pulse_intensity) - i * 35  # 略微降低亮度
+            pulse_surf = pygame.Surface((int(pulse_radius * 2), int(pulse_radius * 2)), pygame.SRCALPHA)
+            pygame.draw.circle(pulse_surf, (255, 255, 220, pulse_alpha),
+                               (int(pulse_radius), int(pulse_radius)),
+                               int(pulse_radius))
+            self.screen.blit(pulse_surf,
+                             (core_center[0] - int(pulse_radius),
+                              core_center[1] - int(pulse_radius)))
+
+        # 菱形点坐标 (按比例缩小)
+        diamond_points = [
+            (core_center[0], core_center[1] - core_size // 2),  # 上
+            (core_center[0] + core_size // 2, core_center[1]),  # 右
+            (core_center[0], core_center[1] + core_size // 2),  # 下
+            (core_center[0] - core_size // 2, core_center[1])  # 左
+        ]
+
+        # 绘制主菱形
+        pygame.draw.polygon(self.screen, (255, 230, 150), diamond_points)
+
+        # 内部装饰 (按比例缩小)
+        inner_diamond_points = []
+        for point in diamond_points:
+            # 缩小到70%大小
+            dx = point[0] - core_center[0]
+            dy = point[1] - core_center[1]
+            inner_point = (core_center[0] + dx * 0.7, core_center[1] + dy * 0.7)
+            inner_diamond_points.append(inner_point)
+
+        # 绘制内部菱形
+        pygame.draw.polygon(self.screen, (255, 250, 220), inner_diamond_points)
+
+        # 核心十字线 (按比例缩小)
+        cross_color = (255, 255, 255, int(200 * pulse_intensity))
+        cross_length = core_size * pulse_intensity
+        pygame.draw.line(self.screen, cross_color,
+                         (core_center[0], core_center[1] - cross_length // 2),
+                         (core_center[0], core_center[1] + cross_length // 2), 2)  # 线宽减小
+        pygame.draw.line(self.screen, cross_color,
+                         (core_center[0] - cross_length // 2, core_center[1]),
+                         (core_center[0] + cross_length // 2, core_center[1]), 2)  # 线宽减小
+
+        # 脉冲光线 (按比例缩小)
+        for i in range(8):
+            angle = anim_time / 500 + i * math.pi / 4
+            line_length = core_size * (0.8 + 0.4 * math.sin(anim_time / 200 + i))
+            end_x = core_center[0] + math.cos(angle) * line_length
+            end_y = core_center[1] + math.sin(angle) * line_length
+
+            # 变化的线宽和透明度
+            line_width = max(1, int(2 * pulse_intensity))  # 线宽减小但至少为1
+            line_alpha = int(150 * pulse_intensity)
+
+            # 创建线性渐变效果
+            for j in range(3):
+                t = j / 2
+                mid_x = core_center[0] + math.cos(angle) * line_length * t
+                mid_y = core_center[1] + math.sin(angle) * line_length * t
+
+                # 计算线段的透明度和宽度
+                segment_alpha = line_alpha * (1 - t)
+                segment_width = max(1, line_width * (1 - t))
+
+                pygame.draw.line(self.screen, (255, 255, 200, int(segment_alpha)),
+                                 (mid_x, mid_y),
+                                 (end_x, end_y), int(segment_width))
+
+        # ----- 周围圣光球 (按比例缩小) -----
+
+        # 创建5个围绕的圣光球 (适当缩小)
+        holy_balls = []
+        for i in range(5):
+            # 计算基础轨道位置 (轨道半径按比例缩小)
+            angle = anim_time / 800 + i * math.pi * 2 / 5
+            radius = (core_size * 3.5 + 15 * math.sin(anim_time / 600 + i * 0.7)) * scale_factor * 1.1  # 适当放大一点轨道以保持平衡
+
+            # 添加不规则运动 (抖动幅度减小)
+            jitter_x = 6 * math.sin(anim_time / 250 + i * 0.9)
+            jitter_y = 6 * math.cos(anim_time / 220 + i * 1.1)
+
+            ball_x = core_center[0] + radius * math.cos(angle) + jitter_x
+            ball_y = core_center[1] + radius * math.sin(angle) + jitter_y
+            ball_size = (13 + 4 * math.sin(anim_time / 200 + i)) * scale_factor  # 球体大小按比例缩小
+
+            holy_balls.append((ball_x, ball_y, ball_size, i))
+
+        # 绘制神圣球连接光线 (按比例缩小)
+        if anim_time % 800 < 400:  # 交替显示连接光线
+            for i in range(len(holy_balls)):
+                start_ball = holy_balls[i]
+                end_ball = holy_balls[(i + 1) % len(holy_balls)]
+
+                # 创建弧形光线路径
+                points = []
+                segments = 8
+                for j in range(segments + 1):
+                    t = j / segments
+                    # 线性插值球体位置
+                    x = start_ball[0] * (1 - t) + end_ball[0] * t
+                    y = start_ball[1] * (1 - t) + end_ball[1] * t
+
+                    # 添加向核心的弯曲 (弯曲程度按比例缩小)
+                    curve_factor = math.sin(t * math.pi) * 15 * scale_factor
+                    dx = core_center[0] - x
+                    dy = core_center[1] - y
+                    dist = math.hypot(dx, dy)
+                    if dist > 0:
+                        x += dx / dist * curve_factor
+                        y += dy / dist * curve_factor
+
+                    points.append((x, y))
+
+                # 绘制连接线 (线宽减小)
+                if len(points) > 1:
+                    for j in range(len(points) - 1):
+                        alpha = int(100 * (1 - abs(j / segments - 0.5) * 2))  # 降低亮度
+                        pygame.draw.line(self.screen, (255, 255, 180, alpha),
+                                         points[j], points[j + 1], 1)  # 线宽减为1
+
+        # 绘制神圣球 (按比例缩小)
+        for ball_x, ball_y, ball_size, idx in holy_balls:
+            # 多层光晕效果 (缩小版)
+            max_glow = 2.2  # 略微减小光晕系数
+
+            # 外层柔和光晕
+            for j in range(3):
+                glow_size = ball_size * (max_glow - j * 0.4)
+                alpha = 90 - j * 25  # 降低透明度
+                ball_glow = pygame.Surface((int(glow_size * 2), int(glow_size * 2)), pygame.SRCALPHA)
+
+                # 根据索引变化颜色
+                hue_shift = idx * 30  # 0-120 度色相变化
+                glow_color = self._hue_shift((255, 255, 200), hue_shift, alpha)
+
+                pygame.draw.circle(ball_glow, glow_color,
+                                   (int(glow_size), int(glow_size)),
+                                   int(glow_size))
+                self.screen.blit(ball_glow,
+                                 (ball_x - int(glow_size),
+                                  ball_y - int(glow_size)))
+
+            # 球体主体
+            main_color = self._hue_shift((255, 255, 220), idx * 30, 255)
+            pygame.draw.circle(self.screen, main_color,
+                               (int(ball_x), int(ball_y)),
+                               int(ball_size))
+
+            # 内部高光 (按比例缩小)
+            highlight_size = ball_size * 0.4
+            pygame.draw.circle(self.screen, (255, 255, 255),
+                               (int(ball_x - ball_size * 0.2), int(ball_y - ball_size * 0.2)),
+                               int(highlight_size))
+
+            # 球体内部能量螺旋 (螺旋段数减少)
+            spiral_points = []
+            spiral_segments = 8  # 减少螺旋段数
+            for s in range(spiral_segments):
+                spiral_t = s / spiral_segments
+                spiral_radius = ball_size * spiral_t * 0.85
+                spiral_angle = spiral_t * 4 * math.pi + anim_time / 200
+
+                sx = ball_x + math.cos(spiral_angle) * spiral_radius
+                sy = ball_y + math.sin(spiral_angle) * spiral_radius
+                spiral_points.append((sx, sy))
+
+            # 绘制螺旋 (线宽减小)
+            if len(spiral_points) > 1:
+                for s in range(len(spiral_points) - 1):
+                    alpha = int(170 * (1 - s / spiral_segments))
+                    pygame.draw.line(self.screen, (255, 255, 255, alpha),
+                                     spiral_points[s], spiral_points[s + 1], 1)  # 线宽减为1
+
+        # ----- 环绕粒子特效 (减少生成概率和数量) -----
+
+        # 随机添加环绕粒子 (降低生成概率)
+        if random.random() < 0.25:  # 降低生成概率
+            particle_angle = random.uniform(0, math.pi * 2)
+            particle_dist = random.uniform(core_size, glow_radius * 0.8)
+            particle_x = core_center[0] + math.cos(particle_angle) * particle_dist
+            particle_y = core_center[1] + math.sin(particle_angle) * particle_dist
+
+            # 向核心的速度矢量
+            dx = core_center[0] - particle_x
+            dy = core_center[1] - particle_y
+            dist = math.hypot(dx, dy)
+            vx = dx / dist * random.uniform(1, 4)  # 略微降低速度
+            vy = dy / dist * random.uniform(1, 4)
+
+            # 添加粒子到游戏粒子系统 (尺寸按比例缩小)
+            self.fear_particles.append({
+                'pos': [particle_x, particle_y],
+                'vel': [vx, vy],
+                'life': random.uniform(0.4, 1.0),  # 略微缩短寿命
+                'max_life': 1.0,
+                'size': random.uniform(1.5, 3.5) * scale_factor,  # 粒子尺寸按比例缩小
+                'color': (255, 255, 200)  # 圣光金色
+            })
+
+    # 辅助函数：调整颜色色相
+    def _hue_shift(self, color, shift, alpha=255):
+        r, g, b = color
+        # 转换为HSV并偏移色相 (简化版本)
+        max_val = max(r, g, b)
+        min_val = min(r, g, b)
+        delta = max_val - min_val
+
+        if delta == 0:
+            return (r, g, b, alpha)  # 灰色无色相
+
+        # 非精确的色相偏移，但足够用于视觉效果
+        shifted_r = int(r * (1 + math.sin(math.radians(shift)) * 0.2))
+        shifted_g = int(g * (1 + math.sin(math.radians(shift + 120)) * 0.2))
+        shifted_b = int(b * (1 + math.sin(math.radians(shift + 240)) * 0.2))
+
+        # 限制在0-255范围内
+        shifted_r = max(0, min(255, shifted_r))
+        shifted_g = max(0, min(255, shifted_g))
+        shifted_b = max(0, min(255, shifted_b))
+
+        return (shifted_r, shifted_g, shifted_b, alpha)
+
     # ------------------- 火焰领主的绘制 -------------------
 
     def draw_fire_lord(self, monster):
@@ -4170,13 +7138,6 @@ class Game:
         # ------------------------- 路径特效更新 -------------------------
         self.set_path_effect()
 
-        # ------------------------- 攻击特效更新 -------------------------
-        for effect in self.skill_effects[:]:
-            if isinstance(effect, (WeaponSwingEffect,
-                                   ProjectileEffect, ClawEffect)):
-                if not effect.update(dt):
-                    self.skill_effects.remove(effect)
-
         # ------------------------- 技能特效更新 -------------------------
 
         self.red_fear = False  # 血腥恐惧debuff
@@ -4184,7 +7145,11 @@ class Game:
         self.gold_fear = False  # 血腥恐惧debuff
         # 更新所有技能特效
         for effect in self.skill_effects[:]:
-            if isinstance(effect, IceBreathEffect):
+            if isinstance(effect, (WeaponSwingEffect,
+                                   ProjectileEffect, ClawEffect)):
+                if not effect.update(dt):
+                    self.skill_effects.remove(effect)
+            elif isinstance(effect, IceBreathEffect):
                 if not effect.update(dt):
                     self.skill_effects.remove(effect)
             elif isinstance(effect, PoisonBall):
@@ -4198,6 +7163,9 @@ class Game:
             elif isinstance(effect, ElectricEffect):
                 if not effect.update(dt):
                     self.skill_effects.remove(effect)
+            elif isinstance(effect, HolyBeamEffect):
+                if not effect.update(dt):
+                    self.skill_effects.remove(effect)
             elif isinstance(effect, FireStrikeEffect):
                 if not effect.update(dt):
                     self.skill_effects.remove(effect)
@@ -4207,7 +7175,7 @@ class Game:
             elif isinstance(effect, LightningEffect):
                 if not effect.update(dt):
                     self.skill_effects.remove(effect)
-            elif isinstance(effect, HollyBallEffect):
+            elif isinstance(effect, HolyBallEffect):
                 still_active, damage_results = effect.update(dt, self.monsters)
                 # Apply damage to monsters
                 for monster, damage_multiplier in damage_results:
@@ -4217,11 +7185,6 @@ class Game:
                         monster.hp -= actual_damage
                         self.add_message(f"神圣球对{monster.name}造成{actual_damage}点伤害！")
 
-                        # Handle monster death
-                        if monster.hp <= 0:
-                            self.add_message(f"击败{monster.name}，获得{monster.coin}金币")
-                            self.player.coins += monster.coin
-                            self.monsters.remove(monster)
                 if not still_active:
                     self.skill_effects.remove(effect)
 
@@ -4243,12 +7206,14 @@ class Game:
                         else:
                             self.add_message(f"三连斩 对{monster.name}造成{actual_damage}点伤害！")
 
-                        if monster.hp <= 0:
-                            self.add_message(f"击败{monster.name}，获得{monster.coin}金币")
-                            self.player.coins += monster.coin
-                            self.monsters.remove(monster)
                 if not still_active:
                     self.skill_effects.remove(effect)
+
+        # ------------------------- 更新怪物移动 -------------------------
+        self.update_monsters(dt)
+
+        # ------------------- 召唤物更新 ------------------------------
+        self.guardian_lightning_balls = [ball for ball in self.guardian_lightning_balls if ball.update(dt, self)] # 更新守护闪电球
 
         # ------------------------- 腐蚀效果更新 -------------------------
         # 在怪物移动添加腐蚀痕迹生成
@@ -4395,6 +7360,103 @@ class Game:
                     self.player_debuff['poison_end'] = pygame.time.get_ticks() + 3000
                     monster.skill_cd = monster.strike_cd
 
+            elif "神圣灾祸骑士" in monster.name:
+                # 初始化技能冷却属性（如果不存在）
+                if not hasattr(monster, 'holy_ball_cd'):
+                    monster.holy_ball_cd = 0
+                    monster.summon_ball_cd = 0
+                    monster.heal_pulse_cd = 0
+                    monster.holy_ball_range = 8
+                    monster.holy_damage = monster.atk * 2
+                    monster.heal_range = 6
+                    monster.heal_amount = 100  # 每次恢复量
+
+                # 更新技能冷却
+                monster.holy_ball_cd = max(0, monster.holy_ball_cd - dt)
+                monster.summon_ball_cd = max(0, monster.summon_ball_cd - dt)
+                monster.heal_pulse_cd = max(0, monster.heal_pulse_cd - dt)
+
+                # 计算与玩家距离
+                dist = abs(self.player.x - monster.x) + abs(self.player.y - monster.y)
+
+                # 使用神圣球技能
+                if dist <= monster.holy_ball_range and monster.holy_ball_cd <= 0:
+                    # 创建效果实例 - 显式标记为怪物技能并传入玩家为目标
+                    effect = HolyBallEffect(
+                        player_pos=(monster.x + 1, monster.y + 1),  # 从怪物中心位置发射
+                        ball_count=5,
+                        seek_range=monster.holy_ball_range,
+                        damage_multiplier=1.5,
+                        is_monster_skill=True,  # 标记为怪物技能
+                        target=self.player,  # 传入玩家为目标
+                        monster=monster  # 传入怪物自身以计算伤害
+                    )
+                    # 添加消息发送方法，以便在适当时机显示消息
+                    effect.add_message = self.add_message
+
+                    # 添加到技能效果列表
+                    self.skill_effects.append(effect)
+                    self.add_message("神圣灾祸骑士释放了神圣球！")
+
+                    # 设置冷却时间
+                    monster.holy_ball_cd = 6.0  # 6秒冷却
+
+                # 使用神圣守护技能
+                if dist <= monster.holy_ball_range * 1.5 and monster.summon_ball_cd <= 0:
+                    # 创建围绕怪物自身的神圣光球，显式标记为怪物技能
+                    holy_guardian = SummonHolyBall(
+                        owner=monster,  # 怪物作为拥有者
+                        ball_count=6,
+                        duration=12.0,
+                        attack_range=6,
+                        attack_speed=1.0,
+                        damage_multiple=1.0,
+                        heal_percent=0,  # 怪物不需要治疗自己
+                        is_monster_skill=True,  # 标记为怪物技能
+                        target=self.player  # 传入玩家为目标
+                    )
+
+                    # 添加到守护球列表
+                    self.guardian_lightning_balls.append(holy_guardian)
+                    self.add_message("神圣灾祸骑士召唤了神圣守护光环！")
+
+                    # 设置冷却时间
+                    monster.summon_ball_cd = 15.0  # 15秒冷却
+
+                # 治疗周围的友军
+                if monster.heal_pulse_cd <= 0:
+                    healed = False
+
+                    # 检查周围6格内的友军
+                    for other_monster in self.monsters:
+                        if other_monster is not monster:  # 不包括自己
+                            distance = abs(monster.x - other_monster.x) + abs(monster.y - other_monster.y)
+                            if distance <= monster.heal_range:
+                                # 治疗友军
+                                other_monster.hp = min(other_monster.hp + monster.heal_amount,
+                                                       other_monster.hp * 1.5)  # 最多恢复到1.5倍初始血量
+                                healed = True
+
+                                # 添加治疗粒子效果
+                                for _ in range(5):
+                                    self.fear_particles.append({
+                                        'pos': [other_monster.x * TILE_SIZE + TILE_SIZE // 2,
+                                                other_monster.y * TILE_SIZE + TILE_SIZE // 2],
+                                        'vel': [random.uniform(-2, 2), random.uniform(-5, -2)],
+                                        'life': random.uniform(0.5, 1.0),
+                                        'max_life': 1.0,
+                                        'size': random.uniform(2, 4),
+                                        'color': (255, 255, 200)  # 金色粒子
+                                    })
+
+                    if healed:
+                        self.add_message("神圣灾祸骑士为周围怪物注入了神圣能量！")
+
+                    # 设置治疗脉冲冷却
+                    monster.heal_pulse_cd = 7.0  # 7秒冷却
+
+
+
         # ----------------- 更新粒子效果 ---------------------------
         for p in self.fear_particles[:]:
             p['pos'][0] += p['vel'][0]
@@ -4448,53 +7510,22 @@ class Game:
                 self.handle_item_pickup(item)
                 self.items.remove(item)
 
-        # 怪物移动逻辑，玩家在三个以内朝向玩家
-        for monster in list(self.monsters):  # 使用副本遍历
-            # 更新移动计数器
-            monster.move_counter += 1
-            if monster.move_counter < monster.speed:
-                continue  # 未达到移动频率，跳过本次移动
 
-            # 重置计数器
-            monster.move_counter = 0
-
-            # 计算与玩家的曼哈顿距离
-            distance = abs(self.player.x - monster.x) + abs(self.player.y - monster.y)
-            # 生成可能的移动方向
-            directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-            random.shuffle(directions)  # 随机顺序尝试
-
-            # 如果玩家在3格内，优先向玩家方向移动
-            if distance <= MONSTER_DISTANCE:
-                # 计算最佳移动方向（向玩家靠近）
-                best_dir = None
-                min_distance = float('inf')
-                original_directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-                for dx, dy in original_directions:
-                    new_x = monster.x + dx
-                    new_y = monster.y + dy
-                    if self.can_monster_move_to(monster, new_x, new_y):
-                        new_dist = abs(self.player.x - new_x) + abs(self.player.y - new_y)
-                        if new_dist < min_distance:
-                            min_distance = new_dist
-                            best_dir = (dx, dy)
-                if best_dir:
-                    directions.insert(0, best_dir)  # 将最佳方向插入最前面
-
-            for dx, dy in directions:
-                new_x = monster.x + dx
-                new_y = monster.y + dy
-                if self.can_monster_move_to(monster, new_x, new_y):
-                    monster.x = new_x
-                    monster.y = new_y
-                    break
+        # 怪物死亡检测
+        for monster in self.monsters[:]:
+            if monster.hp <= 0:
+                self.add_message(f"击败{monster.name}，获得{monster.coin}金币")
+                self.player.coins += monster.coin
+                self.monsters.remove(monster)
 
         # 更新附近怪物列表
         self.nearby_monsters = []
         for monster in self.monsters:
             distance = abs(monster.x - self.player.x) + abs(monster.y - self.player.y)
-            if distance <= 3:
+            if distance <= 5:
                 self.nearby_monsters.append(monster)
+
+
 
         # 喷泉房间生成史莱姆
         if self.fountain_room and self.player_in_fountain_room():
@@ -4878,6 +7909,7 @@ class Game:
         self.screen.blit(panel, (SCREEN_WIDTH - SIDEBAR_WIDTH, 0))
 
     # 右侧玩家状态栏及日志
+    # 重新设计技能显示部分：每行两个技能，共三行
     def draw_left_panel(self):
         panel_width = SIDEBAR_WIDTH
         panel = pygame.Surface((panel_width, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -4948,22 +7980,57 @@ class Game:
         panel.blit(equip_bg, (20, current_y))
         current_y += equip_height + section_gap
 
-        # ------ 技能面板 ------
-        skill_height = 150  # 固定高度
+        # ------ 技能面板（重新设计）------
+        skill_height = 200  # 增加高度以容纳3行技能
         skill_bg = pygame.Surface((260, skill_height), pygame.SRCALPHA)
         skill_bg.fill((40, 40, 60, 200))
         pygame.draw.rect(skill_bg, (80, 80, 100), (0, 0, 260, skill_height), 2)
 
-        skill_font = pygame.font.SysFont("SimSun", 18)
-        for i, (key, skill) in enumerate(self.player.skills.items()):
-            y_pos = 10 + i * 50
-            # 技能名称
-            name_color = (255, 255, 0) if skill['current_cd'] <= 0 else (100, 100, 100)
-            skill_bg.blit(skill_font.render(f"{key}: {skill['name']}", True, name_color), (10, y_pos))
-            # 冷却条
+        skill_font = pygame.font.SysFont("SimSun", 16)  # 减小字体
+        skill_keys = list(self.player.skills.keys())
+
+        # 技能布局参数
+        skill_width = 120  # 每个技能区域宽度
+        skill_height_item = 60  # 每个技能区域高度
+        horizontal_gap = 10  # 水平间距
+        vertical_gap = 5  # 垂直间距
+
+        # 绘制技能网格
+        for i, key in enumerate(skill_keys):
+            if i >= 6:  # 最多显示6个技能
+                break
+
+            skill = self.player.skills[key]
+
+            # 计算技能在网格中的位置
+            row = i // 2  # 每行2个技能
+            col = i % 2  # 0或1列
+
+            # 计算技能绘制的起始位置
+            skill_x = 10 + col * (skill_width + horizontal_gap)
+            skill_y = 10 + row * (skill_height_item + vertical_gap)
+
+            # 计算冷却状态
             cd_ratio = skill['current_cd'] / skill['cooldown'] if skill['current_cd'] > 0 else 0
-            pygame.draw.rect(skill_bg, (80, 80, 80), (10, y_pos + 25, 240, 12))
-            pygame.draw.rect(skill_bg, (0, 200, 0), (10, y_pos + 25, 240 * (1 - cd_ratio), 12))
+            name_color = (255, 255, 0) if cd_ratio == 0 else (100, 100, 100)
+
+            # 绘制技能名称和按键
+            skill_bg.blit(skill_font.render(f"{pygame.key.name(skill['key']).upper()}: {skill['name']}", True, name_color),
+                          (skill_x, skill_y))
+
+            # 绘制冷却条
+            pygame.draw.rect(skill_bg, (80, 80, 80),
+                             (skill_x, skill_y + 20, skill_width - 20, 10))
+            pygame.draw.rect(skill_bg, (0, 200, 0),
+                             (skill_x, skill_y + 20, (skill_width - 20) * (1 - cd_ratio), 10))
+
+            # 如果技能有特殊参数，显示简短信息
+            if 'damage_multiple' in skill:
+                skill_bg.blit(skill_font.render(f"伤害: {skill['damage_multiple']}x", True, (200, 200, 200)),
+                              (skill_x, skill_y + 35))
+            elif 'heal_percent' in skill:
+                skill_bg.blit(skill_font.render(f"治疗: {int(skill['heal_percent'] * 100)}%/秒", True, (100, 255, 100)),
+                              (skill_x, skill_y + 35))
 
         panel.blit(skill_bg, (20, current_y))
         current_y += skill_height + section_gap
@@ -5412,6 +8479,10 @@ class Game:
             elif "火焰领主" in monster.name:
                 self.draw_fire_lord(monster)
 
+            elif "神圣灾祸骑士" in monster.name:
+                self.draw_holy_knight(monster)
+                continue
+
             # 默认怪物造型（史莱姆等）
             else:
                 pygame.draw.ellipse(self.screen, COLOR_MONSTER,
@@ -5425,6 +8496,9 @@ class Game:
                                  (x + w * 0.2, y + h * 0.8), 2)
 
         self.draw_player()  # 绘制玩家
+
+        for ball in self.guardian_lightning_balls: # 绘制守护闪电球
+            ball.draw(self.screen)
 
         self.draw_path()  # 绘制传送路径
 
@@ -5464,21 +8538,31 @@ class Game:
             for dy in range(monster.size[1]):
                 x = new_x + dx
                 y = new_y + dy
+
+                # 检查边界
                 if not (0 <= x < MAP_WIDTH and 0 <= y < MAP_HEIGHT):
                     return False
-                if self.maze[y][x] in [1, 2, 3, 4]:  # 墙壁
+
+                # 检查地形
+                if self.maze[y][x] in [1, 2, 3, 4]:  # 墙壁和特殊地形
+                    return False
+
+                # 检查是否会与玩家重叠
+                if x == self.player.x and y == self.player.y:
                     return False
 
         # 检查与其他怪物的碰撞
         for other in self.monsters:
             if other is monster:
                 continue
+
             # 计算双方的覆盖区域
             if (new_x < other.x + other.size[0] and
                     new_x + monster.size[0] > other.x and
                     new_y < other.y + other.size[1] and
                     new_y + monster.size[1] > other.y):
                 return False
+
         return True
 
     def is_position_empty(self, x, y):
@@ -5600,32 +8684,47 @@ class Game:
                 self.handle_death_screen()
 
     def handle_main_menu(self):
+        """处理主菜单的更新和绘制"""
+        dt = self.clock.tick(60) / 1000  # 获取以秒为单位的帧时间
+
+        # 更新菜单状态
+        self.main_menu.update(dt)
+
+        # 绘制菜单
         button_rects = self.main_menu.draw()
+
+        # 处理输入
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if button_rects[0].collidepoint(event.pos):  # 开始按钮
-                    self.game_state = "playing"
-                elif button_rects[1].collidepoint(event.pos):  # 设置按钮
-                    self.game_state = "settings"
+                if event.button == 1:  # 左键点击
+                    # 检查开始按钮
+                    if self.main_menu.start_button['rect'].collidepoint(event.pos):
+                        # 按钮按下效果
+                        self.main_menu.start_button['active'] = True
+                        self.game_state = "playing"
+                        return "playing"
+                    # 检查设置按钮
+                    elif self.main_menu.settings_button['rect'].collidepoint(event.pos):
+                        # 按钮按下效果
+                        self.main_menu.settings_button['active'] = True
+                        self.game_state = "settings"
+                        return "settings"
+            elif event.type == pygame.MOUSEBUTTONUP:
+                # 重置按钮状态
+                self.main_menu.start_button['active'] = False
+                self.main_menu.settings_button['active'] = False
+
+        # 更新显示
         pygame.display.flip()
+
+        return "menu"  # 继续在主菜单状态
 
     def handle_settings(self):
         settings_menu = SettingsMenu(self.screen)
-        while True:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-
-                result = settings_menu.handle_event(event)
-                if result == "menu":
-                    return "menu"
-                elif result == "apply":
-                    return "apply"
-            settings_menu.draw()
+        return settings_menu.run()
 
     def restart_game(self):
         self.apply_config()
@@ -5644,7 +8743,7 @@ class Game:
                 if pygame.time.get_ticks() < self.player_debuff.get('paralyze_end', 0):  # 动画期间跳过输入处理
                     self.add_message("麻痹中无法移动")
                     continue
-                elif event.key == pygame.K_b:
+                if event.key == pygame.K_b:
                     shop_screen(self.screen, self.player, self.floor)
                 elif event.key == pygame.K_w:
                     self.player.move(0, -1, self)
@@ -5654,14 +8753,10 @@ class Game:
                     self.player.move(-1, 0, self)
                 elif event.key == pygame.K_d:
                     self.player.move(1, 0, self)
-                elif event.key == pygame.K_q:
-                    self.cast_skill('Q')
-                elif event.key == pygame.K_e:
-                    self.cast_skill('E')
-                elif event.key == pygame.K_r:
-                    self.cast_skill('R')
-                elif event.key == pygame.K_t:
-                    self.cast_skill('T')
+                # 技能释放
+                for skill in self.player.skills:
+                    if event.key == self.player.skills[skill]['key']:
+                        self.cast_skill(skill)
             elif event.type == pygame.MOUSEBUTTONDOWN:  # 处理鼠标点击
                 if event.button == 1:  # 左键点击
                     self.handle_mouse_click(event.pos)
