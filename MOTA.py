@@ -98,8 +98,6 @@ ITEM_MAX = math.ceil(M * 8)
 # 普通怪物权重
 MONSTER_WEIGHT = [10, 10, 5, 5, 5, 12, 16, 12, 8, 6, 5, 5, 8, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
- # --------------------------- 实体列表 ------------------------------
-
 # 怪物列表，每个怪物的属性
 monsters_data = [
     # 基础怪物
@@ -134,9 +132,9 @@ monsters_data = [
     {"name": "圣洁魔王", "HP": 1100, "ATK": 55, "DEF": 22, "size": (2, 2),
      "attack_range": 2, "attack_speed": 0.6, "coin": 330, "speed": 45, "level": 6},
     {"name": "普通巨龙", "HP": 5000, "ATK": 110, "DEF": 50, "size": (3, 3),
-     "attack_range": 2, "attack_speed": 0.4, "coin": 1200, "speed": 60, "level": 7},
+     "attack_range": 2, "attack_speed": 0.4, "coin": 1200, "speed": 60, "level": 6},
     {"name": "冰霜巨龙", "HP": 5500, "ATK": 130, "DEF": 55, "size": (3, 3),
-     "attack_range": 3, "attack_speed": 0.5, "coin": 1300, "speed": 60, "level": 8},
+     "attack_range": 3, "attack_speed": 0.5, "coin": 1300, "speed": 60, "level": 7},
     {"name": "血腥闪电", "HP": 6000, "ATK": 200, "DEF": 110, "size": (3, 3),
      "attack_range": 4, "attack_speed": 0.3, "coin": 1500, "speed": 30, "level": 7},
     {"name": "纯青闪电", "HP": 7000, "ATK": 300, "DEF": 130, "size": (3, 3),
@@ -144,11 +142,11 @@ monsters_data = [
     {"name": "金色闪电", "HP": 8000, "ATK": 400, "DEF": 150, "size": (3, 3),
      "attack_range": 4, "attack_speed": 0.5, "coin": 2500, "speed": 30, "level": 9},
     {"name": "火焰领主", "HP": 6500, "ATK": 130, "DEF": 60, "size": (3, 3),
-     "attack_range": 3, "attack_speed": 0.6, "coin": 1500, "speed": 60, "level": 7},
+     "attack_range": 3, "attack_speed": 0.6, "coin": 1500, "speed": 60, "level": 8},
     {"name": "纯火焰领主", "HP": 7500, "ATK": 180, "DEF": 80, "size": (3, 3),
-     "attack_range": 3, "attack_speed": 0.7, "coin": 1900, "speed": 50, "level": 8},
+     "attack_range": 3, "attack_speed": 0.7, "coin": 1900, "speed": 50, "level": 9},
     {"name": "神圣灾祸骑士", "HP": 10000, "ATK": 250, "DEF": 180, "size": (3, 3),
-     "attack_range": 7, "attack_speed": 0.7, "coin": 3000, "speed": 40, "level": 9}
+     "attack_range": 7, "attack_speed": 0.7, "coin": 3000, "speed": 40, "level": 9, "num_balls": 6}
 ]
 
 # 道具类型
@@ -1540,10 +1538,10 @@ class Player:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.hp = 100000
-        self.max_hp = 100000
-        self.base_atk = 25  # 基础攻击力
-        self.base_defense = 25000  # 基础防御力
+        self.hp = 1000
+        self.max_hp = 1000000
+        self.base_atk = 25000  # 基础攻击力
+        self.base_defense = 250000  # 基础防御力
         self.base_attack_speed = 1.0  # 基础攻击速度
         self.base_attack_range = 1   # 基础攻击范围
         self.attack_cooldown = 0
@@ -1702,6 +1700,8 @@ class Monster:
             self.strike_cd = 1.7  # 技能冷却
             self.strike_range = 9  # 影响范围
             self.strike_damage = self.Num_Random_Control(floor, mdata["ATK"]) * 2
+        elif "神圣灾祸骑士" in self.name:
+            self.num_balls= mdata["num_balls"]
 
     def Num_Random_Control(self, floor, x):
         return math.ceil(
@@ -3740,8 +3740,7 @@ class HolyBeamEffect:
                 int(p['size'] * life_ratio * size_mod)
             )
 
-    def create_impact_particles(self, game, target, count=10):  # Reduced from 15
-        """Create minimal impact particles for a clean, compact effect"""
+    def create_impact_particles(self, game, target, count=20):  # Increased from 10 to 20
         # Determine impact center
         if hasattr(target, 'x') and hasattr(target, 'y'):
             impact_center = (target.x * TILE_SIZE + TILE_SIZE // 2,
@@ -3749,46 +3748,55 @@ class HolyBeamEffect:
         else:
             impact_center = target
 
-        # Colors
+        # Colors based on beam type
         if self.color_scheme == "holy":
-            colors = self.primary_colors
+            colors = [(255, 215, 0), (255, 255, 200), (255, 230, 150)]
             explosion_color = (255, 215, 0)
             core_color = (255, 255, 220)
         else:  # lightning
-            colors = self.primary_colors
+            colors = [(30, 144, 255), (100, 200, 255), (200, 240, 255)]
             explosion_color = (30, 144, 255)
             core_color = (200, 240, 255)
 
-        # Create single ring
+        # Create expanding rings with better transparency
+        for i in range(3):
+            delay = i * 0.1  # Staggered ring expansion
+            size_mult = 1.0 + i * 0.4  # Each ring is larger
+
+            game.fear_particles.append({
+                'pos': list(impact_center),
+                'vel': [0, 0],  # Must include velocity for all particles
+                'life': 0.5 - i * 0.1,  # Longer-lived initial rings
+                'max_life': 0.5 - i * 0.1,
+                'size': 10 * size_mult,
+                'color': explosion_color,
+                'is_ring': True,
+                'ring_width': 2,
+                'delay': delay,
+                'alpha_start': 180 - i * 30  # Higher initial opacity that fades out
+            })
+
+        # Create central flash with improved transparency
         game.fear_particles.append({
             'pos': list(impact_center),
-            'vel': [0, 0],
+            'vel': [0, 0],  # Static particle
             'life': 0.3,
             'max_life': 0.3,
-            'size': 15,
-            'color': explosion_color,
-            'is_ring': True,
-            'ring_width': 2,
-            'delay': 0
-        })
-
-        # Create flash
-        game.fear_particles.append({
-            'pos': list(impact_center),
-            'vel': [0, 0],
-            'life': 0.2,
-            'max_life': 0.2,
-            'size': 10,
+            'size': 12,  # Larger flash
             'color': core_color,
-            'is_flash': True
+            'is_flash': True,
+            'alpha_mult': 0.9  # Control max opacity
         })
 
-        # Add minimal particles
+        # Add primary particles - more of them with better variety
         for _ in range(count):
             angle = random.uniform(0, 2 * math.pi)
-            speed = random.uniform(2.5, 10)
-            size = random.uniform(1.5, 3)
-            life = random.uniform(0.2, 0.7)
+            speed = random.uniform(3.0, 12.0)  # Wider speed range
+            size = random.uniform(1.5, 4.0)  # Larger size range
+            life = random.uniform(0.3, 1.0)  # Longer life for some particles
+
+            # Random transparency multiplier
+            alpha_mult = random.uniform(0.7, 1.0)
 
             particle = {
                 'pos': [impact_center[0], impact_center[1]],
@@ -3797,8 +3805,31 @@ class HolyBeamEffect:
                 'max_life': life,
                 'size': size,
                 'color': random.choice(colors),
-                'gravity': 0,  # No gravity for cleaner effect
-                'rotation': None  # No rotation for simpler particles
+                'alpha_mult': alpha_mult,  # Control max opacity
+            }
+
+            game.fear_particles.append(particle)
+
+        # Add secondary glow particles (smaller, more numerous)
+        for _ in range(count // 2):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(1.0, 6.0)  # Slower speed for lingering effect
+            size = random.uniform(0.8, 2.5)  # Smaller particles
+            life = random.uniform(0.6, 1.2)  # Longer-lived
+
+            # More transparent
+            alpha_mult = random.uniform(0.4, 0.7)
+
+            particle = {
+                'pos': [impact_center[0] + random.uniform(-10, 10),
+                        impact_center[1] + random.uniform(-10, 10)],  # Slight position variance
+                'vel': [math.cos(angle) * speed, math.sin(angle) * speed],
+                'life': life,
+                'max_life': life,
+                'size': size,
+                'color': random.choice(colors),
+                'alpha_mult': alpha_mult,
+                'is_glow': True  # Flag for special rendering
             }
 
             game.fear_particles.append(particle)
@@ -4115,12 +4146,12 @@ class SummonHolyBall:
             end_pos[0] += end_jitter[0]
             end_pos[1] += end_jitter[1]
 
-            # 创建神圣光束效果
+            # 创建神圣光束效果 - 确保使用"holy"颜色方案
             holy_beam = HolyBeamEffect(
                 start=tuple(start_pos),
                 end=tuple(end_pos),
                 duration=0.4,
-                color_scheme="holy",
+                color_scheme="holy",  # 使用金色系的圣光效果
                 damage=actual_damage
             )
             game.skill_effects.append(holy_beam)
@@ -4138,6 +4169,27 @@ class SummonHolyBall:
             pulse = 0.5 + 0.5 * math.sin(anim_time / 200 + self.orbit_angle)
             core_radius = int(self.size * (1 + 0.2 * pulse))
 
+            # 添加外部光晕渐变效果 - 新增
+            for i in range(4):
+                outer_radius = core_radius * (1.8 - i * 0.2)
+                alpha = int(70 - i * 15)  # 从外到内逐渐降低透明度
+
+                if outer_radius <= 0:
+                    continue
+
+                outer_surf = pygame.Surface((outer_radius * 2, outer_radius * 2), pygame.SRCALPHA)
+
+                # 根据技能类型选择颜色
+                if self.is_monster_skill:
+                    outer_color = (255, 215, 0, alpha)  # 怪物技能偏金色
+                else:
+                    outer_color = (255, 230, 150, alpha)  # 玩家技能圣光色
+
+                pygame.draw.circle(outer_surf, outer_color, (outer_radius, outer_radius), outer_radius)
+                screen.blit(outer_surf,
+                            (int(self.position[0] - outer_radius),
+                             int(self.position[1] - outer_radius)))
+
             # 绘制多层递减透明度的核心
             for i in range(3):
                 alpha = 200 - i * 50
@@ -4148,14 +4200,35 @@ class SummonHolyBall:
 
                 temp_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
 
-                # 根据技能类型选择颜色
+                # 根据技能类型选择颜色 - 修正为都使用圣光金色系
                 if self.is_monster_skill:
                     color = (255, 215, 0, alpha)  # 怪物技能偏金色
                 else:
-                    color = (0, 191, 255, alpha) if i % 2 == 0 else (100, 180, 255, alpha)
+                    color = (255, 230, 150, alpha) if i % 2 == 0 else (255, 255, 220, alpha)  # 玩家技能也使用圣光色
 
                 pygame.draw.circle(temp_surf, color, (radius, radius), radius)
                 screen.blit(temp_surf, (int(self.position[0] - radius), int(self.position[1] - radius)))
+
+            # 绘制内部发光核心 - 新增
+            inner_glow_radius = core_radius * 0.6
+            inner_glow = pygame.Surface((inner_glow_radius * 2, inner_glow_radius * 2), pygame.SRCALPHA)
+
+            # 创建径向渐变效果
+            for r in range(int(inner_glow_radius), 0, -1):
+                intensity = r / inner_glow_radius
+                alpha = int(255 * intensity)
+                if self.is_monster_skill:
+                    glow_color = (255, 255, 220, alpha)  # 怪物技能内核偏白
+                else:
+                    glow_color = (255, 255, 255, alpha)  # 玩家技能内核纯白
+
+                pygame.draw.circle(inner_glow, glow_color,
+                                   (int(inner_glow_radius), int(inner_glow_radius)),
+                                   r)
+
+            screen.blit(inner_glow,
+                        (int(self.position[0] - inner_glow_radius),
+                         int(self.position[1] - inner_glow_radius)))
 
             # 绘制光线连接
             for conn in self.light_rays:
@@ -4186,14 +4259,46 @@ class SummonHolyBall:
 
                 # 绘制光线段
                 for i in range(len(points) - 1):
-                    # 根据释放者选择不同颜色
+                    # 根据释放者选择不同颜色 - 修正为都使用圣光系颜色
                     if self.is_monster_skill:
                         line_color = (255, 215, 0, int(255 * life_ratio))  # 金色
                     else:
-                        line_color = (150, 220, 255, int(255 * life_ratio))  # 蓝色
+                        line_color = (255, 240, 180, int(255 * life_ratio))  # 淡金色
 
                     pygame.draw.line(screen, line_color, points[i], points[i + 1],
                                      max(1, int(3 * life_ratio)))
+
+            # 随机添加粒子效果 - 新增
+            if random.random() < 0.3:
+                angle = random.uniform(0, math.pi * 2)
+                distance = random.uniform(core_radius * 0.7, core_radius * 1.5)
+                particle_pos = [
+                    self.position[0] + math.cos(angle) * distance,
+                    self.position[1] + math.sin(angle) * distance
+                ]
+
+                # 判断粒子颜色
+                if self.is_monster_skill:
+                    particle_color = (255, 255, 150)  # 怪物技能粒子
+                else:
+                    particle_color = (255, 250, 200)  # 玩家技能粒子
+
+                # 添加到游戏的粒子系统
+                game_particle = {
+                    'pos': particle_pos,
+                    'vel': [random.uniform(-1, 1), random.uniform(-1, 1)],
+                    'life': random.uniform(0.3, 0.7),
+                    'max_life': 0.7,
+                    'size': random.uniform(1, 2.5),
+                    'color': particle_color
+                }
+
+                # 如果游戏对象可访问，添加粒子
+                try:
+                    if hasattr(self.owner, 'fear_particles'):
+                        self.owner.fear_particles.append(game_particle)
+                except:
+                    pass  # 忽略如果添加失败
 
 
 # ---------------- 魔王重锤眩晕 --------------------
@@ -4272,10 +4377,8 @@ class IceBreathEffect:
                                (p['size'], p['size']), p['size'])
             screen.blit(alpha_surface, p['pos'])
 
-    # 法师毒液球
 
-
-class PoisonBall:
+class PoisonBall:  # 法师毒液球
     def __init__(self, start, target):
         self.pos = list(start)
         self.target = target
@@ -4330,34 +4433,103 @@ class CorrosionEffect:
         self.x = x
         self.y = y
         self.create_time = pygame.time.get_ticks()
-        self.particles = []  # 腐蚀粒子效果
-        # 初始化腐蚀粒子
+        self.particles = []  # Particle effects for corrosion
+
+        # Create more particles for richer effect
         for _ in range(20):
             self.particles.append({
-                'pos': (x * TILE_SIZE + random.randint(2, 29), y * TILE_SIZE + random.randint(2, 29)),
-                'size': random.randint(2, 4),
+                'pos': (x * TILE_SIZE + random.randint(2, TILE_SIZE - 2),
+                        y * TILE_SIZE + random.randint(2, TILE_SIZE - 2)),
+                'size': random.randint(2, 6),
                 'alpha': 255,
                 'speed': (random.uniform(-0.5, 0.5), random.uniform(-0.5, 0.5))
             })
 
+        # Generate irregular corrosion blobs
+        self.corrosion_points = []
+        for _ in range(8):
+            self.corrosion_points.append({
+                'pos': (x * TILE_SIZE + random.randint(5, TILE_SIZE - 5),
+                        y * TILE_SIZE + random.randint(5, TILE_SIZE - 5)),
+                'radius': random.randint(4, 12),
+                'alpha': random.randint(150, 200)
+            })
+
     def update(self, current_time):
-        # 更新粒子状态
+        # Calculate elapsed time
+        elapsed = current_time - self.create_time
+
+        # Update particle positions and alpha
         for p in self.particles:
             p['pos'] = (p['pos'][0] + p['speed'][0], p['pos'][1] + p['speed'][1])
-            p['alpha'] = max(0, 255 - (current_time - self.create_time) * 85 // 1000)  # 3秒淡出
-        return current_time - self.create_time < 3000  # 3秒后消失
+            p['alpha'] = max(0, 255 - (elapsed * 85 // 1000))  # Fade over 3 seconds
+
+            # Slow down particle movement over time
+            p['speed'] = (p['speed'][0] * 0.98, p['speed'][1] * 0.98)
+
+        # Update corrosion points alpha
+        for point in self.corrosion_points:
+            point['alpha'] = max(0, point['alpha'] - (elapsed // 20))
+
+        return elapsed < 3000  # Effect lasts 3 seconds
 
     def draw(self, screen):
-        # 绘制基底腐蚀效果
-        base_alpha = max(0, 200 - (pygame.time.get_ticks() - self.create_time) // 15)
-        base_rect = pygame.Rect(self.x * TILE_SIZE, self.y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-        pygame.draw.rect(screen, (91, 13, 133, base_alpha), base_rect)  # 紫黑色基底
+        # Draw corrosion base - irregular splotches
+        for point in self.corrosion_points:
+            if point['alpha'] > 0:
+                # Create a surface for the blob with alpha
+                blob_surf = pygame.Surface((point['radius'] * 2, point['radius'] * 2), pygame.SRCALPHA)
+                pygame.draw.circle(blob_surf, (91, 13, 133, point['alpha']),
+                                   (point['radius'], point['radius']), point['radius'])
 
-        # 绘制动态腐蚀粒子
+                # Add some irregularity to the blob
+                for _ in range(3):
+                    offset_x = random.randint(-4, 4)
+                    offset_y = random.randint(-4, 4)
+                    pygame.draw.circle(blob_surf, (91, 13, 133, point['alpha'] // 2),
+                                       (point['radius'] + offset_x, point['radius'] + offset_y),
+                                       point['radius'] // 2)
+
+                screen.blit(blob_surf, (int(point['pos'][0] - point['radius']),
+                                        int(point['pos'][1] - point['radius'])))
+
+        # Draw particles
         for p in self.particles:
             if p['alpha'] > 0:
-                pygame.draw.circle(screen, (139, 0, 0, p['alpha']),  # 深红色粒子
-                                   (int(p['pos'][0]), int(p['pos'][1])), p['size'])
+                # Alternate between dark red and purple for variety
+                color = (139, 0, 0, p['alpha']) if random.random() < 0.5 else (120, 20, 130, p['alpha'])
+
+                # Create surface with alpha
+                part_surf = pygame.Surface((p['size'] * 2, p['size'] * 2), pygame.SRCALPHA)
+                pygame.draw.circle(part_surf, color, (p['size'], p['size']), p['size'])
+
+                screen.blit(part_surf, (int(p['pos'][0] - p['size']), int(p['pos'][1] - p['size'])))
+
+        # Draw random corrosion streaks/cracks
+        current_time = pygame.time.get_ticks()
+        elapsed = current_time - self.create_time
+        fade_factor = max(0, 1 - (elapsed / 3000))
+
+        if random.random() < 0.3 * fade_factor:  # Less frequent streaks as effect fades
+            for _ in range(2):
+                # Random streak position and direction
+                start_x = self.x * TILE_SIZE + random.randint(5, TILE_SIZE - 5)
+                start_y = self.y * TILE_SIZE + random.randint(5, TILE_SIZE - 5)
+
+                # Create irregular path for the streak
+                points = [(start_x, start_y)]
+                for i in range(3):
+                    next_x = points[-1][0] + random.randint(-8, 8)
+                    next_y = points[-1][1] + random.randint(-8, 8)
+                    points.append((next_x, next_y))
+
+                # Draw the corrosion streak
+                streak_alpha = int(180 * fade_factor)
+                if streak_alpha > 0:
+                    for i in range(len(points) - 1):
+                        pygame.draw.line(screen, (139, 0, 0, streak_alpha),
+                                         points[i], points[i + 1],
+                                         max(1, int(2 * fade_factor)))
 
  # ----------------------- 物品装备实体 --------------------------
 
@@ -4370,6 +4542,8 @@ class Item:
         self.equipment_data = equipment_data  # 存储装备数据
 
 # -------- 迷宫生成函数 --------
+
+
 def generate_maze(width=CONFIG["MAP_WIDTH"], height=CONFIG["MAP_HEIGHT"]):
     maze = [[1 for _ in range(width)] for _ in range(height)]
     start_x = random.randrange(1, width, 2)
@@ -4435,6 +4609,8 @@ class Game:
         self.main_menu = MainMenu(self.screen)  # 确保 MainMenu 被正确初始化
         self.floor = 1
         self.tile_styles = []  # 用于存储地砖样式数据
+        self.maze = []
+        self.rooms = []
 
         self.is_animating = False  # 动画播放状态
         self.animation_radius = 0  # 当前动画半径
@@ -4863,7 +5039,6 @@ class Game:
                     self.screen.blit(timeout_surf, (debug_x, debug_y - 15))
 
     def update_monsters(self, dt):
-        """更新所有怪物的状态和位置"""
         for monster in self.monsters[:]:
             # 为怪物添加必要的属性，如果没有
             if not hasattr(monster, 'message_cooldown'):
@@ -5100,7 +5275,6 @@ class Game:
 
     # -------------- 血腥闪电绘制函数 -------------------------------
     def draw_lightning_boss(self, monster):
-        """绘制闪电BOSS（支持血腥、纯青、金色三种配色）"""
         x = monster.x * TILE_SIZE
         y = monster.y * TILE_SIZE
 
@@ -5256,120 +5430,244 @@ class Game:
     # -------------------- 蝙蝠绘制 ---------------------
 
     def draw_bat(self, monster):
-        body_color = (54, 54, 54)  # 身体颜色 深灰色
-        wing_color = (40, 40, 40)  # 翅膀颜色 更深的灰色
-        skeleton_color = (80, 80, 80)  # 骨架颜色
-
-        # 颜色随机反转
-        if "白色" in monster.name:
-            body_color = self.color_reverse(body_color)
-            wing_color = self.color_reverse(wing_color)
-            skeleton_color = self.color_reverse(skeleton_color)
-
+        # Base position
         x = monster.x * TILE_SIZE
         y = monster.y * TILE_SIZE
-        # 蝙蝠主体（倒挂姿态）
-        head_radius = TILE_SIZE // 6
-        body_width = TILE_SIZE // 3
-        body_height = TILE_SIZE // 2
 
-        # 倒挂的身体
-        pygame.draw.ellipse(self.screen, body_color,
-                            (x + TILE_SIZE // 2 - body_width // 2,
-                             y + TILE_SIZE // 2 - body_height // 2,
-                             body_width, body_height))
+        # Animation parameters
+        anim_time = pygame.time.get_ticks()
+        flap_speed = anim_time / 150  # Wing flapping speed
+        flap_position = math.sin(flap_speed)  # -1 to 1 value for wing position
+        hover_offset = int(math.sin(anim_time / 400) * 2)  # Vertical hovering motion
 
-        # 头部
-        pygame.draw.circle(self.screen, body_color,
-                           (x + TILE_SIZE // 2, y + TILE_SIZE // 3),
-                           head_radius)
+        # Colors based on bat type
+        if "白色" in monster.name:
+            body_color = (200, 200, 210)  # Light gray for white bat
+            wing_color = (170, 170, 180)  # Slightly darker for wings
+            eye_color = (255, 0, 0)  # Red eyes
+        else:
+            body_color = (54, 54, 54)  # Dark gray for regular bat
+            wing_color = (30, 30, 30)  # Black wings
+            eye_color = (255, 0, 0)  # Red eyes
 
-        # 耳朵
-        ear_points = [
-            (x + TILE_SIZE // 2 - head_radius // 2, y + TILE_SIZE // 3 - head_radius),
-            (x + TILE_SIZE // 2, y + TILE_SIZE // 3 - head_radius * 1.5),
-            (x + TILE_SIZE // 2 + head_radius // 2, y + TILE_SIZE // 3 - head_radius)
+        # Center point of the bat
+        center_x = x + TILE_SIZE // 2
+        center_y = y + TILE_SIZE // 2 + hover_offset
+
+        # Body size parameters - reduced overall size
+        body_width = TILE_SIZE // 4  # Reduced from TILE_SIZE // 3
+        body_height = TILE_SIZE // 3  # Reduced from TILE_SIZE // 2
+        head_radius = TILE_SIZE // 8  # Reduced from TILE_SIZE // 6
+
+        # Draw the bat body (oval shape)
+        body_rect = pygame.Rect(
+            center_x - body_width // 2,
+            center_y - body_height // 2,
+            body_width,
+            body_height
+        )
+        pygame.draw.ellipse(self.screen, body_color, body_rect)
+
+        # Draw the head
+        head_y = center_y - body_height // 3  # Position head at upper part of body
+        pygame.draw.circle(self.screen, body_color, (center_x, head_y), head_radius)
+
+        # Draw the ears (triangular)
+        ear_height = head_radius
+        ear_width = head_radius // 2
+
+        # Left ear
+        left_ear_points = [
+            (center_x - ear_width, head_y - head_radius // 2),
+            (center_x - ear_width // 2, head_y - head_radius - ear_height),
+            (center_x, head_y - head_radius // 2)
         ]
-        pygame.draw.polygon(self.screen, body_color, ear_points)
+        pygame.draw.polygon(self.screen, body_color, left_ear_points)
 
-        # 翅膀（双层设计）
-        # 左翼
-        left_wing = [
-            (x + TILE_SIZE // 4, y + TILE_SIZE // 2),
-            (x + TILE_SIZE // 2 - 2, y + TILE_SIZE // 3),
-            (x, y + TILE_SIZE // 4)
+        # Right ear
+        right_ear_points = [
+            (center_x, head_y - head_radius // 2),
+            (center_x + ear_width // 2, head_y - head_radius - ear_height),
+            (center_x + ear_width, head_y - head_radius // 2)
         ]
-        pygame.draw.polygon(self.screen, wing_color, left_wing)
-        # 右翼
-        right_wing = [
-            (x + 3 * TILE_SIZE // 4, y + TILE_SIZE // 2),
-            (x + TILE_SIZE // 2 + 2, y + TILE_SIZE // 3),
-            (x + TILE_SIZE, y + TILE_SIZE // 4)
-        ]
-        pygame.draw.polygon(self.screen, wing_color, right_wing)
+        pygame.draw.polygon(self.screen, body_color, right_ear_points)
 
-        # 翅膀骨架（增加细节）
-        # 左翼骨架
-        pygame.draw.line(self.screen, skeleton_color,
-                         left_wing[0], left_wing[1], 2)
-        pygame.draw.line(self.screen, skeleton_color,
-                         left_wing[1], left_wing[2], 2)
-        # 右翼骨架
-        pygame.draw.line(self.screen, skeleton_color,
-                         right_wing[0], right_wing[1], 2)
-        pygame.draw.line(self.screen, skeleton_color,
-                         right_wing[1], right_wing[2], 2)
+        # Draw the eyes (red and glowing)
+        eye_radius = max(2, head_radius // 3)
+        eye_spacing = head_radius
 
-        # 眼睛（红色发光效果）
-        eye_radius = 2
-        pygame.draw.circle(self.screen, (255, 0, 0),
-                           (x + TILE_SIZE // 2 - eye_radius, y + TILE_SIZE // 3 - eye_radius),
+        # Left eye
+        pygame.draw.circle(self.screen, eye_color,
+                           (center_x - eye_spacing // 2, head_y),
                            eye_radius)
-        pygame.draw.circle(self.screen, (255, 0, 0),
-                           (x + TILE_SIZE // 2 + eye_radius, y + TILE_SIZE // 3 - eye_radius),
+
+        # Right eye
+        pygame.draw.circle(self.screen, eye_color,
+                           (center_x + eye_spacing // 2, head_y),
                            eye_radius)
 
-        # 阴影效果
-        shadow_color = (20, 20, 20)
-        pygame.draw.arc(self.screen, shadow_color,
-                        (x + TILE_SIZE // 4, y + TILE_SIZE // 2 - 2,
-                         TILE_SIZE // 2, TILE_SIZE // 4),
-                        math.radians(180), math.radians(360), 2)
+        # Draw the wings with animation - reduced wing span
+        wing_span = TILE_SIZE * (0.4 + 0.2 * abs(flap_position))  # Reduced from 0.5 + 0.3
+        wing_droop = 0.2 - 0.2 * flap_position  # Wing droop varies with flap
+
+        # Left wing
+        left_wing_tip_x = center_x - wing_span
+        left_wing_tip_y = center_y - wing_span * wing_droop
+
+        left_wing_points = [
+            (center_x - body_width // 3, center_y - body_height // 4),  # Wing base
+            (center_x - wing_span // 2, center_y - wing_span * 0.3),  # Wing middle
+            (left_wing_tip_x, left_wing_tip_y),  # Wing tip
+            (center_x - wing_span // 2, center_y + body_height // 4)  # Wing bottom
+        ]
+        pygame.draw.polygon(self.screen, wing_color, left_wing_points)
+
+        # Right wing
+        right_wing_tip_x = center_x + wing_span
+        right_wing_tip_y = center_y - wing_span * wing_droop
+
+        right_wing_points = [
+            (center_x + body_width // 3, center_y - body_height // 4),  # Wing base
+            (center_x + wing_span // 2, center_y - wing_span * 0.3),  # Wing middle
+            (right_wing_tip_x, right_wing_tip_y),  # Wing tip
+            (center_x + wing_span // 2, center_y + body_height // 4)  # Wing bottom
+        ]
+        pygame.draw.polygon(self.screen, wing_color, right_wing_points)
+
+        # Wing bone structure (simple lines)
+        # Left wing bones
+        pygame.draw.line(self.screen, body_color,
+                         left_wing_points[0], left_wing_points[2], 1)
+        pygame.draw.line(self.screen, body_color,
+                         left_wing_points[0], left_wing_points[3], 1)
+
+        # Right wing bones
+        pygame.draw.line(self.screen, body_color,
+                         right_wing_points[0], right_wing_points[2], 1)
+        pygame.draw.line(self.screen, body_color,
+                         right_wing_points[0], right_wing_points[3], 1)
+
+        # Legs/claws (small details)
+        claw_length = body_height // 3
+        pygame.draw.line(self.screen, body_color,
+                         (center_x - body_width // 4, center_y + body_height // 2),
+                         (center_x - body_width // 4, center_y + body_height // 2 + claw_length), 1)
+        pygame.draw.line(self.screen, body_color,
+                         (center_x + body_width // 4, center_y + body_height // 2),
+                         (center_x + body_width // 4, center_y + body_height // 2 + claw_length), 1)
 
     # -------------------- 腐蚀怪绘制 ---------------------
     def draw_corrosion_monster(self, monster):
-        # 动态腐蚀肉块造型
-        anim_time = pygame.time.get_ticks()
-        body_color = (91, 13, 133)  # 紫黑色基底
+        # Base position
         x = monster.x * TILE_SIZE
         y = monster.y * TILE_SIZE
 
-        # 主体（动态蠕动的椭圆）
-        pygame.draw.ellipse(self.screen, body_color,
-                            (x + math.sin(anim_time / 300) * 3,
-                             y + math.cos(anim_time / 250) * 2,
-                             TILE_SIZE, TILE_SIZE))
+        # Animation parameters
+        anim_time = pygame.time.get_ticks()
+        pulse_factor = 0.15 * math.sin(anim_time / 300)  # Pulsing effect
 
-        # 血色斑点（随机分布）
-        for _ in range(8):
-            spot_x = x + random.randint(4, 27)
-            spot_y = y + random.randint(4, 27)
-            pygame.draw.circle(self.screen, (139, 0, 0),
-                               (spot_x, spot_y), random.randint(2, 4))
+        # Color definitions
+        base_color = (91, 13, 133)  # Dark purple base
+        spot_color = (139, 0, 0)  # Blood red spots
+        drip_color = (120, 10, 120)  # Drip color
+        bubble_color = (160, 32, 240)  # Bubble highlights
 
-        # 表面蠕动效果
+        # Center coordinates
+        center_x = x + TILE_SIZE // 2
+        center_y = y + TILE_SIZE // 2
+
+        # Calculate wobble radius with pulsing
+        radius_x = int(TILE_SIZE // 2 * (1 + pulse_factor))
+        radius_y = int(TILE_SIZE // 2 * (1 - pulse_factor * 0.5))
+
+        # Draw wobbling main body (elliptical shape)
+        body_rect = pygame.Rect(
+            center_x - radius_x,
+            center_y - radius_y,
+            radius_x * 2,
+            radius_y * 2
+        )
+        pygame.draw.ellipse(self.screen, base_color, body_rect)
+
+        # Draw a darker bottom area for depth
+        bottom_rect = pygame.Rect(
+            center_x - radius_x * 0.8,
+            center_y + radius_y * 0.2,
+            radius_x * 1.6,
+            radius_y * 0.8
+        )
+        darker_color = (70, 5, 100)  # Darker version of base color
+        pygame.draw.ellipse(self.screen, darker_color, bottom_rect)
+
+        # Draw blood-like spots in pseudo-random positions based on animation time
+        num_spots = 6
+        for i in range(num_spots):
+            # Use animation time to create semi-random but stable spot positions
+            angle = math.radians((i * 60 + anim_time // 30) % 360)
+            distance = TILE_SIZE // 3 * (0.5 + 0.3 * math.sin(anim_time / 400 + i))
+
+            spot_x = center_x + math.cos(angle) * distance
+            spot_y = center_y + math.sin(angle) * distance
+            spot_size = 2 + i % 3  # Vary spot sizes
+
+            pygame.draw.circle(self.screen, spot_color, (int(spot_x), int(spot_y)), spot_size)
+
+        # Draw surface wave/bulge effects to show movement
         for i in range(3):
-            wave_y = y + TILE_SIZE // 2 + math.sin(anim_time / 200 + i) * 8
-            pygame.draw.arc(self.screen, (70, 0, 70),
-                            (x + i * 8, wave_y - 4, 16, 8),
-                            math.radians(180), math.radians(360), 2)
+            wave_y = y + TILE_SIZE // 2 + i * 8
+            wave_width = TILE_SIZE // 2 - i * 3
+            wave_height = 6
+            wave_x = x + TILE_SIZE // 2 - wave_width // 2
 
-        # 环境互动：滴落粘液
-        if random.random() < 0.05:
-            drop_x = x + random.randint(8, 23)
-            drop_y = y + TILE_SIZE
-            pygame.draw.line(self.screen, (139, 0, 0, 150),
-                             (drop_x, drop_y), (drop_x, drop_y + 8), 3)
+            # Make waves move
+            wave_x += int(math.sin(anim_time / 200 + i * 1.5) * 4)
+
+            wave_rect = pygame.Rect(wave_x, wave_y, wave_width, wave_height)
+            pygame.draw.ellipse(self.screen, bubble_color, wave_rect)
+
+        # Occasionally create dripping effect
+        if anim_time % 500 < 200:  # Drip visible 40% of the time
+            drip_x = center_x + int(math.sin(anim_time / 1000) * (TILE_SIZE // 3))
+            drip_length = 5 + int(3 * math.sin(anim_time / 250))
+
+            pygame.draw.line(self.screen, drip_color,
+                             (drip_x, y + TILE_SIZE - 2),
+                             (drip_x, y + TILE_SIZE + drip_length), 3)
+
+            # Drip droplet at the end
+            pygame.draw.circle(self.screen, drip_color,
+                               (drip_x, y + TILE_SIZE + drip_length), 2)
+
+        # Add bubbling effect (small bubbles occasionally rising)
+        if random.random() < 0.3:  # 30% chance each frame
+            bubble_x = center_x + random.randint(-radius_x // 2, radius_x // 2)
+            bubble_y = center_y + random.randint(-radius_y // 2, radius_y // 2)
+            bubble_radius = random.randint(1, 3)
+
+            # Draw bubble with highlight
+            pygame.draw.circle(self.screen, bubble_color,
+                               (bubble_x, bubble_y), bubble_radius)
+            pygame.draw.circle(self.screen, (200, 100, 220),
+                               (bubble_x - 1, bubble_y - 1), bubble_radius // 2)
+
+        # Draw eyes (more menacing)
+        eye_spacing = TILE_SIZE // 3
+        eye_y = center_y - radius_y // 2
+        eye_size = 3
+
+        # Left eye
+        pygame.draw.circle(self.screen, (255, 20, 20),
+                           (center_x - eye_spacing // 2, eye_y), eye_size)
+
+        # Right eye
+        pygame.draw.circle(self.screen, (255, 20, 20),
+                           (center_x + eye_spacing // 2, eye_y), eye_size)
+
+        # Add small pupil to each eye for more detail
+        pygame.draw.circle(self.screen, (0, 0, 0),
+                           (center_x - eye_spacing // 2, eye_y), 1)
+        pygame.draw.circle(self.screen, (0, 0, 0),
+                           (center_x + eye_spacing // 2, eye_y), 1)
 
     # -------------------- 火焰骑士绘制 ---------------------
     def draw_fire_knight(self, monster):
@@ -5379,173 +5677,379 @@ class Game:
         anim_time = pygame.time.get_ticks()
         hammer_swing = math.sin(anim_time / 300) * 0.5  # 锤子摆动弧度
         shield_glow = abs(math.sin(anim_time / 500))  # 盾牌发光强度
+        armor_pulse = 0.1 * math.sin(anim_time / 400)  # 盔甲呼吸效果
 
-        # 基础体型（1x1格子）
-        body_color = (30, 30, 30)  # 暗黑基底色
+        # 颜色定义
         if "纯" in monster.name:
-            body_color = self.color_reverse(body_color)
-        body_rect = (x + TILE_SIZE // 4, y + TILE_SIZE // 4, TILE_SIZE // 2, TILE_SIZE // 2)
-        pygame.draw.rect(self.screen, body_color, body_rect)
+            body_color = (50, 140, 220)  # 纯火焰骑士为冰蓝色
+            flame_color = (30, 150, 255)  # 冰焰颜色
+            highlight_color = (150, 200, 255)  # 高光色
+            ember_colors = [(100, 200, 255), (150, 220, 255), (200, 240, 255)]  # 冰焰微粒
+        else:
+            body_color = (80, 40, 30)  # 暗红褐色基底
+            flame_color = (220, 100, 50)  # 火焰颜色
+            highlight_color = (255, 200, 100)  # 高光色
+            ember_colors = [(255, 180, 0), (255, 120, 0), (255, 60, 0)]  # 火焰微粒
 
-        # 方形头部（较小）
-        head_size = TILE_SIZE // 4
-        head_center = (x + TILE_SIZE // 2, y + TILE_SIZE // 4)
-        # 头盔主体
-        pygame.draw.rect(self.screen, (40, 40, 40),
-                         (head_center[0] - head_size // 2, head_center[1] - head_size // 2,
-                          head_size, head_size))
-        # 眼部红光
-        pygame.draw.rect(self.screen, (200, 0, 0),
-                         (head_center[0] - head_size // 4, head_center[1] - head_size // 6,
-                          head_size // 2, head_size // 3))
-        # 恶魔之角
-        pygame.draw.polygon(self.screen, (60, 60, 60), [
-            (head_center[0] - head_size // 2, head_center[1] - head_size // 2),
-            (head_center[0] - head_size // 3, head_center[1] - head_size),
-            (head_center[0] - head_size // 6, head_center[1] - head_size // 2)
+        # ---- 躯干 ----
+        # 基础体型（1x1格子）调整为略微更大
+        torso_width = int(TILE_SIZE * (0.6 + armor_pulse))
+        torso_height = int(TILE_SIZE * (0.7 + armor_pulse))
+        torso_x = x + (TILE_SIZE - torso_width) // 2
+        torso_y = y + (TILE_SIZE - torso_height) // 2 + 5  # 下移调整位置
+
+        # 绘制躯干主体
+        pygame.draw.rect(self.screen, body_color,
+                         (torso_x, torso_y, torso_width, torso_height),
+                         border_radius=3)
+
+        # ---- 头部 ----
+        # 方形头盔（略大一点）
+        head_size = TILE_SIZE // 3
+        head_x = x + (TILE_SIZE - head_size) // 2
+        head_y = torso_y - head_size + 5  # 让头部略微嵌入躯干
+
+        # 头盔主体 - 更精细的渐变
+        pygame.draw.rect(self.screen, body_color,
+                         (head_x, head_y, head_size, head_size),
+                         border_radius=2)
+
+        # 头盔装饰纹路 - 增加质感
+        pygame.draw.line(self.screen, highlight_color,
+                         (head_x, head_y + head_size // 3),
+                         (head_x + head_size, head_y + head_size // 3), 1)
+
+        # 眼部发光 - 强化动态效果
+        eye_size = head_size // 4
+        eye_y = head_y + head_size // 3
+        eye_spacing = head_size // 2
+        eye_glow = 150 + int(100 * math.sin(anim_time / 250))  # 动态发光
+
+        # 左眼
+        if "纯" in monster.name:
+            eye_color = (0, eye_glow, 255)  # 冰蓝眼睛
+        else:
+            eye_color = (255, eye_glow, 0)  # 火红眼睛
+
+        pygame.draw.rect(self.screen, eye_color,
+                         (head_x + (head_size - eye_spacing) // 2 - eye_size // 2,
+                          eye_y, eye_size, eye_size // 2))
+
+        # 右眼
+        pygame.draw.rect(self.screen, eye_color,
+                         (head_x + (head_size + eye_spacing) // 2 - eye_size // 2,
+                          eye_y, eye_size, eye_size // 2))
+
+        # 恶魔之角 - 更尖锐立体
+        horn_height = head_size // 2
+        # 左角
+        pygame.draw.polygon(self.screen, body_color, [
+            (head_x, head_y),
+            (head_x - head_size // 4, head_y - horn_height),
+            (head_x + head_size // 4, head_y)
+        ])
+        # 右角
+        pygame.draw.polygon(self.screen, body_color, [
+            (head_x + head_size, head_y),
+            (head_x + head_size + head_size // 4, head_y - horn_height),
+            (head_x + head_size - head_size // 4, head_y)
         ])
 
-        # 深渊铠甲系统（紧凑版）
-        armor_color = (60, 60, 60)
-        if "纯" in monster.name:
-            armor_color = self.color_reverse(armor_color)
+        # ---- 深渊铠甲 ----
         # 肩甲
-        pygame.draw.rect(self.screen, armor_color,
-                         (x + TILE_SIZE // 4, y + TILE_SIZE // 3,
-                          TILE_SIZE // 2, TILE_SIZE // 6))
-        # 胸甲（带恶魔浮雕）
-        pygame.draw.rect(self.screen, armor_color,
-                         (x + TILE_SIZE // 3, y + TILE_SIZE // 2,
-                          TILE_SIZE // 3, TILE_SIZE // 3))
-        # 浮雕细节
-        pygame.draw.arc(self.screen, (80, 80, 80),
-                        (x + TILE_SIZE // 3 + 2, y + TILE_SIZE // 2 + 2,
-                         TILE_SIZE // 3 - 4, TILE_SIZE // 3 - 4),
-                        math.radians(0), math.radians(180), 2)
+        shoulder_height = torso_height // 4
+        pygame.draw.rect(self.screen, highlight_color,
+                         (torso_x - 2, torso_y, torso_width + 4, shoulder_height),
+                         border_radius=2)
 
-        # 地狱重锤系统（紧凑版）
-        hammer_length = TILE_SIZE // 2
-        # 锤柄
-        pygame.draw.line(self.screen, (70, 70, 70),
-                         (x + TILE_SIZE // 2, y + TILE_SIZE // 2),
-                         (x + TILE_SIZE // 2 + int(hammer_length * math.cos(hammer_swing)),
-                          y + TILE_SIZE // 2 + int(hammer_length * math.sin(hammer_swing))), 4)
-        # 锤头
-        hammer_head = (x + TILE_SIZE // 2 + int(hammer_length * math.cos(hammer_swing)),
-                       y + TILE_SIZE // 2 + int(hammer_length * math.sin(hammer_swing)))
+        # 胸甲（带精细恶魔浮雕）
+        chest_x = torso_x + torso_width // 4
+        chest_y = torso_y + shoulder_height + 2
+        chest_width = torso_width // 2
+        chest_height = torso_height // 2
+
+        # 绘制胸甲基底
+        pygame.draw.rect(self.screen, body_color,
+                         (chest_x, chest_y, chest_width, chest_height),
+                         border_radius=1)
+
+        # 浮雕细节 - 增加神秘恶魔符文
+        symbol_size = min(chest_width, chest_height) // 2
+        symbol_x = chest_x + (chest_width - symbol_size) // 2
+        symbol_y = chest_y + (chest_height - symbol_size) // 2
+
+        # 动态发光符文
+        if anim_time % 1000 < 500:  # 间歇性发光
+            rune_intensity = 100 + int(155 * shield_glow)
+            if "纯" in monster.name:
+                rune_color = (0, rune_intensity, 255)
+            else:
+                rune_color = (255, rune_intensity, 0)
+
+            # 五角星符文
+            pygame.draw.polygon(self.screen, rune_color, [
+                (symbol_x + symbol_size // 2, symbol_y),
+                (symbol_x + symbol_size, symbol_y + symbol_size * 3 // 4),
+                (symbol_x, symbol_y + symbol_size * 3 // 4),
+                (symbol_x + symbol_size, symbol_y + symbol_size // 4),
+                (symbol_x, symbol_y + symbol_size // 4)
+            ], 1)
+
+        # ---- 地狱重锤 ----
+        hammer_length = TILE_SIZE * 0.7
+        hammer_angle = math.radians(30 + hammer_swing * 30)  # 更大摆动范围
+        hammer_base_x = torso_x + torso_width
+        hammer_base_y = torso_y + torso_height // 2
+
+        hammer_head_x = hammer_base_x + math.cos(hammer_angle) * hammer_length
+        hammer_head_y = hammer_base_y + math.sin(hammer_angle) * hammer_length
+
+        # 锤柄（带纹理）
+        pygame.draw.line(self.screen, (60, 40, 20),
+                         (hammer_base_x, hammer_base_y),
+                         (hammer_head_x, hammer_head_y), 3)
+
+        # 锤头（更精细的设计）
+        hammer_head_size = TILE_SIZE // 5  # 锤头尺寸
+
+        # 绘制锤头主体
         if "纯" in monster.name:
-            pygame.draw.circle(self.screen, (55, 205, 205), hammer_head, 6)
+            pygame.draw.circle(self.screen, (30, 120, 200),
+                               (int(hammer_head_x), int(hammer_head_y)), hammer_head_size)
         else:
-            pygame.draw.circle(self.screen, (200, 50, 50), hammer_head, 6)
+            pygame.draw.circle(self.screen, (160, 40, 40),
+                               (int(hammer_head_x), int(hammer_head_y)), hammer_head_size)
 
-        # 火焰粒子
+        # 锤头装饰 - 尖刺效果
+        spikes = 5
+        for i in range(spikes):
+            spike_angle = i * (2 * math.pi / spikes) + anim_time / 500  # 缓慢旋转
+            spike_length = hammer_head_size * 0.7
+            spike_end_x = hammer_head_x + math.cos(spike_angle) * spike_length
+            spike_end_y = hammer_head_y + math.sin(spike_angle) * spike_length
+
+            pygame.draw.line(self.screen, highlight_color,
+                             (hammer_head_x, hammer_head_y),
+                             (spike_end_x, spike_end_y), 2)
+
+        # ---- 邪能盾牌 ----
+        shield_center = (torso_x - torso_width // 4, torso_y + torso_height // 2)
+        shield_size = torso_width // 2
+
+        # 盾牌基底 - 六边形更适合骑士
         if "纯" in monster.name:
-            for _ in range(4):
-                fx = hammer_head[0] + random.randint(-5, 5)
-                fy = hammer_head[1] + random.randint(-5, 5)
-                pygame.draw.circle(self.screen, (0, 255-random.randint(100, 150), 255),
-                                   (fx, fy), random.randint(1, 2))
+            shield_color = (30, 100, 200)  # 冰蓝盾牌
         else:
-            for _ in range(4):
-                fx = hammer_head[0] + random.randint(-5, 5)
-                fy = hammer_head[1] + random.randint(-5, 5)
-                pygame.draw.circle(self.screen, (255, random.randint(100, 150), 0),
-                                   (fx, fy), random.randint(1, 2))
+            shield_color = (120, 40, 40)  # 暗红盾牌
 
-        # 邪能盾牌系统（紧凑版）
-        shield_center = (x + TILE_SIZE // 4, y + TILE_SIZE // 2)
-        shield_size = TILE_SIZE // 4
-        # 基底
-        pygame.draw.polygon(self.screen, (80, 80, 80), [
-            (shield_center[0], shield_center[1] - shield_size // 2),
-            (shield_center[0] + shield_size // 2, shield_center[1]),
-            (shield_center[0], shield_center[1] + shield_size // 2),
-            (shield_center[0] - shield_size // 2, shield_center[1])
-        ])
-        # 发光符文
-        rune_color = (50, 200, 50, int(200 * shield_glow))
-        if "纯" in monster.name:
-            rune_color = self.color_reverse(rune_color)
-        pygame.draw.polygon(self.screen, rune_color, [
-            (shield_center[0], shield_center[1] - shield_size // 4),
-            (shield_center[0] + shield_size // 4, shield_center[1]),
-            (shield_center[0], shield_center[1] + shield_size // 4),
-            (shield_center[0] - shield_size // 4, shield_center[1])
-        ], 2)
+        shield_points = []
+        for i in range(6):
+            angle = i * (2 * math.pi / 6) + math.pi / 6  # 旋转使六边形直立
+            px = shield_center[0] + math.cos(angle) * shield_size
+            py = shield_center[1] + math.sin(angle) * shield_size
+            shield_points.append((px, py))
 
-        # 地面阴影
-        shadow = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow, (0, 0, 0, 80),
-                            (x + TILE_SIZE // 4, y + TILE_SIZE // 2,
-                             TILE_SIZE // 2, TILE_SIZE // 4))
-        self.screen.blit(shadow, (x, y))
+        pygame.draw.polygon(self.screen, shield_color, shield_points)
+
+        # 盾牌发光符文 - 更精细的符文
+        rune_color = flame_color
+        rune_size = shield_size * 0.5 * (0.8 + 0.2 * shield_glow)  # 动态大小
+
+        # 中心十字符文
+        pygame.draw.line(self.screen, rune_color,
+                         (shield_center[0] - rune_size, shield_center[1]),
+                         (shield_center[0] + rune_size, shield_center[1]), 2)
+        pygame.draw.line(self.screen, rune_color,
+                         (shield_center[0], shield_center[1] - rune_size),
+                         (shield_center[0], shield_center[1] + rune_size), 2)
+
+        # 周围小圆
+        small_circles = 3
+        for i in range(small_circles):
+            circle_angle = i * (2 * math.pi / small_circles) + anim_time / 800  # 缓慢旋转
+            circle_distance = rune_size * 0.7
+            circle_x = shield_center[0] + math.cos(circle_angle) * circle_distance
+            circle_y = shield_center[1] + math.sin(circle_angle) * circle_distance
+            circle_size = rune_size * 0.15 * (0.8 + 0.2 * math.sin(anim_time / 300 + i))
+
+            pygame.draw.circle(self.screen, highlight_color,
+                               (int(circle_x), int(circle_y)), int(circle_size))
+
+        # ---- 火焰/冰焰特效 ----
+        ember_count = 5 + int(3 * math.sin(anim_time / 400))  # 动态数量
+
+        # 从锤头和角生成火焰/冰焰微粒
+        emission_points = [
+            (hammer_head_x, hammer_head_y),  # 锤头
+            (head_x - head_size // 4, head_y - horn_height),  # 左角
+            (head_x + head_size + head_size // 4, head_y - horn_height)  # 右角
+        ]
+
+        for point in emission_points:
+            for _ in range(ember_count // 2):
+                # 随机方向、大小和透明度
+                ember_angle = random.uniform(0, math.pi * 2)
+                ember_distance = random.uniform(2, 8)
+                ember_size = random.uniform(1, 3)
+                ember_alpha = random.randint(100, 200)
+
+                # 计算位置
+                ember_x = point[0] + math.cos(ember_angle) * ember_distance
+                ember_y = point[1] + math.sin(ember_angle) * ember_distance
+
+                # 绘制微粒
+                ember_color = random.choice(ember_colors)
+                pygame.draw.circle(self.screen, (*ember_color, ember_alpha),
+                                   (int(ember_x), int(ember_y)), int(ember_size))
+
+        # ---- 地面阴影 ----
+        shadow_surface = pygame.Surface((TILE_SIZE, TILE_SIZE // 4), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow_surface, (0, 0, 0, 60),
+                            (0, 0, TILE_SIZE, TILE_SIZE // 4))
+        self.screen.blit(shadow_surface, (x, y + TILE_SIZE - TILE_SIZE // 6))
 
     # -------------------- 骷髅绘制 ---------------------
     def draw_skeleton(self, monster):
         x = monster.x * TILE_SIZE
         y = monster.y * TILE_SIZE
-        # 骨骼颜色
-        bone_color = (240, 240, 220)
-        worn_color = (180, 180, 160)
 
-        # 头部（带破损）
-        head_center = (x + TILE_SIZE // 2, y + TILE_SIZE // 4)
-        pygame.draw.circle(self.screen, bone_color, head_center, 10)
-        # 眼部空洞
+        # Animation parameters - subtle for small space
+        anim_time = pygame.time.get_ticks()
+        jaw_motion = math.sin(anim_time / 300) * 1.5  # Subtle jaw movement
+
+        # Bone colors
+        bone_color = (240, 240, 220)  # Bone white
+        shadow_color = (210, 210, 190)  # Subtle shadow for bones
+
+        # Create a central alignment point
+        center_x = x + TILE_SIZE // 2
+        center_y = y + TILE_SIZE // 2
+
+        # Draw skull (smaller and centered in the tile)
+        skull_radius = TILE_SIZE // 5
+        skull_y = center_y - TILE_SIZE // 3
+        pygame.draw.circle(self.screen, bone_color, (center_x, skull_y), skull_radius)
+
+        # Eye sockets (small but visible)
+        eye_size = max(2, TILE_SIZE // 12)
         pygame.draw.circle(self.screen, (30, 30, 30),
-                           (head_center[0] - 4, head_center[1] - 2), 3)
+                           (center_x - skull_radius // 2, skull_y - 1), eye_size)
         pygame.draw.circle(self.screen, (30, 30, 30),
-                           (head_center[0] + 4, head_center[1] - 2), 3)
-        # 下颚（动态开合）
-        jaw_angle = math.sin(pygame.time.get_ticks() / 300) * 0.2
-        jaw_points = [
-            (head_center[0] - 8, head_center[1] + 5),
-            (head_center[0] + 8, head_center[1] + 5),
-            (head_center[0] + 6, head_center[1] + 10 + 3 * jaw_angle),
-            (head_center[0] - 6, head_center[1] + 10 + 3 * jaw_angle)
-        ]
-        pygame.draw.polygon(self.screen, bone_color, jaw_points)
+                           (center_x + skull_radius // 2, skull_y - 1), eye_size)
 
-        # 脊椎（带破损效果）
-        for i in range(5):
-            seg_y = y + TILE_SIZE // 3 + i * 8
-            if i % 2 == 0:
-                pygame.draw.ellipse(self.screen, worn_color,
-                                    (x + TILE_SIZE // 2 - 4, seg_y, 8, 6))
-            else:
-                pygame.draw.ellipse(self.screen, bone_color,
-                                    (x + TILE_SIZE // 2 - 4, seg_y, 8, 6))
+        # Jaw (simple but animated)
+        jaw_width = skull_radius * 1.5
+        jaw_y_offset = int(jaw_motion)
+        pygame.draw.polygon(self.screen, bone_color, [
+            (center_x - jaw_width // 2, skull_y + skull_radius // 2),
+            (center_x + jaw_width // 2, skull_y + skull_radius // 2),
+            (center_x + jaw_width // 2 - 2, skull_y + skull_radius + jaw_y_offset),
+            (center_x - jaw_width // 2 + 2, skull_y + skull_radius + jaw_y_offset)
+        ])
 
-        # 肋骨（不对称破损）
-        rib_points = [
-            (x + TILE_SIZE // 2, y + TILE_SIZE // 2),
-            (x + TILE_SIZE // 2 + 15, y + TILE_SIZE // 2 - 10),
-            (x + TILE_SIZE // 2 + 10, y + TILE_SIZE // 2 + 20),
-            (x + TILE_SIZE // 2 - 15, y + TILE_SIZE // 2 + 15)
-        ]
-        pygame.draw.polygon(self.screen, bone_color, rib_points, 2)
+        # Spine and ribs (simplified for small tiles)
+        spine_top = skull_y + skull_radius + jaw_y_offset + 2
+        spine_bottom = center_y + TILE_SIZE // 4
 
-        # 手臂
-        # 右臂
-        pygame.draw.line(self.screen, bone_color,
-                         (x + TILE_SIZE // 2, y + TILE_SIZE // 2),
-                         (x + TILE_SIZE, y + TILE_SIZE // 3), 4)
+        # Spine (central line with segments)
+        spine_segments = 3  # Fewer segments for small space
+        for i in range(spine_segments):
+            segment_y = spine_top + (spine_bottom - spine_top) * i // spine_segments
+            segment_height = (spine_bottom - spine_top) // spine_segments - 1
+            pygame.draw.rect(self.screen, bone_color,
+                             (center_x - 1, segment_y, 2, segment_height))
 
-        # 左臂
-        pygame.draw.line(self.screen, bone_color,
-                         (x + TILE_SIZE // 2, y + TILE_SIZE // 2),
-                         (x, y + TILE_SIZE // 3), 4)
+        # Ribcage (simplified, just two pairs)
+        rib_y1 = spine_top + (spine_bottom - spine_top) // 3
+        rib_y2 = spine_top + (spine_bottom - spine_top) * 2 // 3
+        rib_width = TILE_SIZE // 3
 
-        # 骨盆
+        # Upper ribs
         pygame.draw.arc(self.screen, bone_color,
-                        (x + TILE_SIZE // 2 - 15, y + TILE_SIZE - 20, 30, 20),
-                        math.radians(180), math.radians(360), 4)
+                        (center_x - rib_width // 2, rib_y1, rib_width, 5),
+                        math.radians(180), math.radians(360), 1)
 
-        # 飘散的灵魂残片
-        for _ in range(3):
-            px = x + random.randint(10, TILE_SIZE - 10)
-            py = y + random.randint(10, TILE_SIZE - 10)
-            pygame.draw.circle(self.screen, (150, 150, 255, 100), (px, py), 2)
+        # Lower ribs
+        pygame.draw.arc(self.screen, bone_color,
+                        (center_x - rib_width // 2, rib_y2, rib_width, 5),
+                        math.radians(180), math.radians(360), 1)
+
+        # Pelvis (simple curved line)
+        pelvis_y = spine_bottom + 4
+        pygame.draw.arc(self.screen, bone_color,
+                        (center_x - TILE_SIZE // 4, pelvis_y, TILE_SIZE // 2, 5),
+                        math.radians(0), math.radians(180), 2)
+
+        # Arms (simplified for small space)
+        # Left arm
+        arm_angle = math.sin(anim_time / 600) * 0.2
+        shoulder_y = rib_y1
+
+        # Calculate arm joint positions with subtle animation
+        left_shoulder_x = center_x - TILE_SIZE // 6
+        left_elbow_x = left_shoulder_x - TILE_SIZE // 8
+        left_elbow_y = shoulder_y + TILE_SIZE // 6
+
+        # Draw upper and lower arm
+        pygame.draw.line(self.screen, bone_color,
+                         (left_shoulder_x, shoulder_y),
+                         (left_elbow_x, left_elbow_y), 2)
+        pygame.draw.line(self.screen, bone_color,
+                         (left_elbow_x, left_elbow_y),
+                         (left_elbow_x - TILE_SIZE // 10, left_elbow_y + TILE_SIZE // 7), 1)
+
+        # Right arm
+        right_shoulder_x = center_x + TILE_SIZE // 6
+        right_elbow_x = right_shoulder_x + TILE_SIZE // 8
+        right_elbow_y = shoulder_y + TILE_SIZE // 6
+
+        pygame.draw.line(self.screen, bone_color,
+                         (right_shoulder_x, shoulder_y),
+                         (right_elbow_x, right_elbow_y), 2)
+        pygame.draw.line(self.screen, bone_color,
+                         (right_elbow_x, right_elbow_y),
+                         (right_elbow_x + TILE_SIZE // 10, right_elbow_y + TILE_SIZE // 7), 1)
+
+        # Legs (simplified for small space)
+        hip_y = pelvis_y
+        left_hip_x = center_x - TILE_SIZE // 8
+        right_hip_x = center_x + TILE_SIZE // 8
+
+        # Left leg
+        left_knee_y = hip_y + TILE_SIZE // 6
+        left_foot_y = hip_y + TILE_SIZE // 3
+        pygame.draw.line(self.screen, bone_color,
+                         (left_hip_x, hip_y),
+                         (left_hip_x - 2, left_knee_y), 2)
+        pygame.draw.line(self.screen, bone_color,
+                         (left_hip_x - 2, left_knee_y),
+                         (left_hip_x - 4, left_foot_y), 1)
+
+        # Right leg
+        right_knee_y = hip_y + TILE_SIZE // 6
+        right_foot_y = hip_y + TILE_SIZE // 3
+        pygame.draw.line(self.screen, bone_color,
+                         (right_hip_x, hip_y),
+                         (right_hip_x + 2, right_knee_y), 2)
+        pygame.draw.line(self.screen, bone_color,
+                         (right_hip_x + 2, right_knee_y),
+                         (right_hip_x + 4, right_foot_y), 1)
+
+        # Add subtle ethereal effect (one small particle)
+        if random.random() < 0.3:
+            glow_x = center_x + random.randint(-TILE_SIZE // 4, TILE_SIZE // 4)
+            glow_y = center_y + random.randint(-TILE_SIZE // 4, TILE_SIZE // 4)
+            glow_size = random.randint(1, 2)
+            glow_color = (150, 150, 255, 100)
+
+            # Only draw if pygame supports per-pixel alpha
+            try:
+                glow_surf = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
+                pygame.draw.circle(glow_surf, glow_color, (glow_size, glow_size), glow_size)
+                self.screen.blit(glow_surf, (glow_x - glow_size, glow_y - glow_size))
+            except:
+                # Fallback if SRCALPHA not supported
+                pygame.draw.circle(self.screen, glow_color[:3], (glow_x, glow_y), glow_size)
 
     # -------------------- 史莱姆绘制 ---------------------
     def draw_slim(self, monster):
@@ -5553,466 +6057,1601 @@ class Game:
         y = monster.y * TILE_SIZE
         w = monster.size[0] * TILE_SIZE
         h = monster.size[1] * TILE_SIZE
-        # 根据不同类型设置颜色
+
+        # Animation parameters
+        anim_time = pygame.time.get_ticks()
+        bounce_offset = int(2 * math.sin(anim_time / 300))  # Bouncing motion
+        squish_factor = 0.15 * math.sin(anim_time / 200)  # Body squishing effect
+
+        # Center of the slime for rounded shape
+        center_x = x + w // 2
+        center_y = y + h // 2 + bounce_offset
+
+        # Calculate radius with squish effect (taller/shorter)
+        radius_x = int(w * 0.45 * (1.0 + squish_factor))
+        radius_y = int(h * 0.45 * (1.0 - squish_factor * 0.8))
+
+        # Get base color based on slime type
         if "红" in monster.name:
-            base_color = (220, 20, 60)  # 红色
-            highlight_color = (255, 99, 71)  # 番茄红
+            base_color = (220, 20, 60)  # 红色史莱姆
+            highlight_color = (255, 99, 71)
+            bubble_color = (255, 150, 150)
         elif "黑" in monster.name:
-            base_color = (35, 35, 35)  # 暗黑色
-            highlight_color = (105, 105, 105)  # 暗灰色
-        elif "闪光" in monster.name:  # 闪光
-            base_color = (50, 205, 50)
-            highlight_color = (144, 238, 144)
-            if random.random() < 0.6:
-                base_color = (220, 20, 60)
+            base_color = (35, 35, 35)  # 黑色史莱姆
+            highlight_color = (105, 105, 105)
+            bubble_color = (80, 80, 80)
+        elif "闪光" in monster.name:
+            # Flashy slime has faster color-shifting effect
+            color_phase = (anim_time % 800) / 800  # Increased frequency (1500 → 800ms)
+            if color_phase < 0.33:
+                base_color = (50, 205, 50)  # Green
+                highlight_color = (144, 238, 144)
+                bubble_color = (200, 255, 200)
+            elif color_phase < 0.66:
+                base_color = (220, 20, 60)  # Red
                 highlight_color = (255, 99, 71)
-                if random.random() < 0.5:
-                    base_color = (35, 35, 35)
-                    highlight_color = (105, 105, 105)
+                bubble_color = (255, 200, 200)
+            else:
+                base_color = (35, 35, 35)  # Black
+                highlight_color = (105, 105, 105)
+                bubble_color = (150, 150, 150)
         else:  # 普通史莱姆
             base_color = (50, 205, 50)
             highlight_color = (144, 238, 144)
+            bubble_color = (200, 255, 200)
 
-        # 凝胶状身体
-        body_rect = (x + 2, y + 2, w - 4, h - 4)
-        pygame.draw.ellipse(self.screen, base_color, body_rect)
+        # Draw slime body - perfectly round with squish
+        slime_rect = pygame.Rect(
+            center_x - radius_x,
+            center_y - radius_y,
+            radius_x * 2,
+            radius_y * 2
+        )
 
-        # 高光效果
-        pygame.draw.arc(self.screen, highlight_color, body_rect,
-                        math.radians(30), math.radians(150), 2)
+        # Shadow beneath (slightly offset and darker)
+        shadow_rect = pygame.Rect(
+            center_x - radius_x + 2,
+            center_y - radius_y + radius_y * 1.5,
+            radius_x * 2,
+            radius_y * 0.5
+        )
+        shadow_color = (max(0, base_color[0] - 40), max(0, base_color[1] - 40), max(0, base_color[2] - 40))
+        pygame.draw.ellipse(self.screen, shadow_color, shadow_rect)
 
-        # 特殊效果：红史莱姆添加火焰纹，黑史莱姆添加金属反光
-        # if "红" in monster.name:
-        # 火焰纹效果
-        #    flame_points = [
-        #        (x + w * 0.3, y + h * 0.7),
-        #        (x + w * 0.5, y + h * 0.3),
-        #        (x + w * 0.7, y + h * 0.7)
-        #    ]
-        #    pygame.draw.polygon(self.screen, (255, 165, 0), flame_points)
+        # Main slime body - perfect ellipse
+        pygame.draw.ellipse(self.screen, base_color, slime_rect)
+
+        # Bottom edge for depth (darker area at bottom of slime)
+        bottom_height = radius_y * 0.3
+        bottom_rect = pygame.Rect(
+            center_x - radius_x * 0.85,
+            center_y + radius_y - bottom_height,
+            radius_x * 1.7,
+            bottom_height
+        )
+
+        # Calculate darker bottom color
+        darker_color = (max(0, base_color[0] - 30), max(0, base_color[1] - 30), max(0, base_color[2] - 30))
+        pygame.draw.ellipse(self.screen, darker_color, bottom_rect)
+
+        # Top highlight (shiny spot) - smaller ellipse near top
+        highlight_width = radius_x * 1.3
+        highlight_height = radius_y * 0.6
+        highlight_rect = pygame.Rect(
+            center_x - highlight_width // 2,
+            center_y - radius_y + radius_y * 0.25,
+            highlight_width,
+            highlight_height
+        )
+        pygame.draw.ellipse(self.screen, highlight_color, highlight_rect)
+
+        # Secondary smaller highlight (extra shine)
+        small_highlight = pygame.Rect(
+            center_x - radius_x * 0.2,
+            center_y - radius_y * 0.6,
+            radius_x * 0.4,
+            radius_y * 0.3
+        )
+        pygame.draw.ellipse(self.screen, (255, 255, 255, 180), small_highlight)
+
+        # Draw internal features based on slime type
         if "黑" in monster.name:
-            # 金属反光效果
-            pygame.draw.line(self.screen, (169, 169, 169),
-                             (x + w * 0.3, y + h * 0.3),
-                             (x + w * 0.7, y + h * 0.7), 2)
+            # Metallic sheen for black slime - curved reflections
+            pygame.draw.arc(self.screen, (100, 100, 100),
+                            (center_x - radius_x * 0.6, center_y - radius_y * 0.5,
+                             radius_x * 1.2, radius_y * 1.0),
+                            math.radians(220), math.radians(320), 2)
+        elif "红" in monster.name:
+            # Fire-like core for red slime
+            core_width = radius_x
+            core_height = radius_y * 1.2
+            pygame.draw.ellipse(self.screen, (255, 165, 0, 180),
+                                (center_x - core_width // 2, center_y - core_height // 2,
+                                 core_width, core_height))
 
-        # 气泡效果（黑史莱姆不显示气泡）
+        # Add bubbles and inner details (except for black slime)
         if "黑" not in monster.name:
+            # Dynamic bubble positions inside the rounded shape
             for i in range(3):
-                bx = x + random.randint(3, w - 6)
-                by = y + random.randint(3, h - 6)
-                pygame.draw.circle(self.screen, highlight_color, (bx, by), 1)
+                # Calculate position with angle to keep bubbles inside ellipse
+                angle = math.radians(i * 120 + anim_time / 10)
+                distance = radius_x * 0.5 * random.uniform(0.5, 0.8)
+                bx = center_x + math.cos(angle) * distance
+                by = center_y + math.sin(angle) * distance * (radius_y / radius_x)  # Adjust for ellipse
+
+                # Bubble size varies
+                bubble_size = 1 + i % 3
+
+                # Draw bubble
+                pygame.draw.circle(self.screen, bubble_color, (int(bx), int(by)), bubble_size)
+                # Small highlight in bubble
+                pygame.draw.circle(self.screen, (255, 255, 255),
+                                   (int(bx - bubble_size * 0.3), int(by - bubble_size * 0.3)),
+                                   max(1, bubble_size // 2))
+
+        # Special effects for Flash Slime
+        if "闪光" in monster.name:
+            # Enhanced glow effect around the slime
+            glow_radius_x = radius_x * 1.3
+            glow_radius_y = radius_y * 1.3
+
+            try:
+                # Create a soft glow using a semi-transparent surface
+                glow_surf = pygame.Surface((glow_radius_x * 2, glow_radius_y * 2), pygame.SRCALPHA)
+
+                # Pulsating glow intensity based on time
+                glow_intensity = 40 + int(20 * math.sin(anim_time / 100))  # Faster pulsing
+
+                # Draw multiple layers of glow with different opacity
+                for i in range(3):
+                    scale = 1.0 - i * 0.2
+                    alpha = glow_intensity - i * 10
+                    # Use the current slime color for the glow
+                    glow_color = (base_color[0], base_color[1], base_color[2], alpha)
+
+                    pygame.draw.ellipse(glow_surf, glow_color,
+                                        (glow_radius_x * (1 - scale),
+                                         glow_radius_y * (1 - scale),
+                                         glow_radius_x * 2 * scale,
+                                         glow_radius_y * 2 * scale))
+
+                # Draw the glow behind the slime
+                self.screen.blit(glow_surf,
+                                 (center_x - glow_radius_x,
+                                  center_y - glow_radius_y))
+            except:
+                # Fallback if SRCALPHA not supported
+                pass
+
+            # Add more sparkle effects (increased from 3 to 5)
+            for _ in range(5):
+                # Random angle and distance within slime
+                angle = random.uniform(0, math.pi * 2)
+                distance = random.uniform(0, radius_x * 0.8)
+                spark_x = center_x + math.cos(angle) * distance
+                spark_y = center_y + math.sin(angle) * distance * (radius_y / radius_x)
+
+                # Draw sparkle (tiny star-like shape)
+                pygame.draw.circle(self.screen, (255, 255, 200), (int(spark_x), int(spark_y)), 1)
+
+                # Add more frequent larger flashes (increased probability from 0.2 to 0.4)
+                if random.random() < 0.4:
+                    pygame.draw.circle(self.screen, (255, 255, 200), (int(spark_x), int(spark_y)), 2)
+
+            # Add occasional bright flashing star (new feature)
+            if random.random() < 0.15:  # 15% chance per frame
+                flash_x = center_x + random.uniform(-radius_x * 0.7, radius_x * 0.7)
+                flash_y = center_y + random.uniform(-radius_y * 0.7, radius_y * 0.7)
+
+                # Draw a 4-point star
+                star_size = random.randint(3, 5)
+                pygame.draw.line(self.screen, (255, 255, 255),
+                                 (flash_x - star_size, flash_y),
+                                 (flash_x + star_size, flash_y), 1)
+                pygame.draw.line(self.screen, (255, 255, 255),
+                                 (flash_x, flash_y - star_size),
+                                 (flash_x, flash_y + star_size), 1)
+
+        # Draw face (all slimes have faces)
+        # Eyes position - in upper part of slime
+        eye_y_pos = center_y - radius_y * 0.2
+        eye_x_spacing = radius_x * 0.4
+        eye_size = max(2, radius_x // 10)
+
+        # Draw eyes
+        left_eye_x = center_x - eye_x_spacing
+        right_eye_x = center_x + eye_x_spacing
+
+        # Left eye
+        pygame.draw.circle(self.screen, (0, 0, 0), (int(left_eye_x), int(eye_y_pos)), eye_size)
+        # Right eye
+        pygame.draw.circle(self.screen, (0, 0, 0), (int(right_eye_x), int(eye_y_pos)), eye_size)
+
+        # Eye highlights (small white dots)
+        pygame.draw.circle(self.screen, (255, 255, 255),
+                           (int(left_eye_x - eye_size * 0.3), int(eye_y_pos - eye_size * 0.3)),
+                           max(1, eye_size // 2))
+        pygame.draw.circle(self.screen, (255, 255, 255),
+                           (int(right_eye_x - eye_size * 0.3), int(eye_y_pos - eye_size * 0.3)),
+                           max(1, eye_size // 2))
+
+        # Mouth - simple curve below eyes
+        mouth_y = eye_y_pos + radius_y * 0.25
+        mouth_width = radius_x * 0.8
+        mouth_height = radius_y * 0.3
+
+        # Happy curved mouth
+        pygame.draw.arc(self.screen, (0, 0, 0),
+                        (center_x - mouth_width // 2, mouth_y,
+                         mouth_width, mouth_height),
+                        math.pi * 0.2, math.pi * 0.8, 2)
+
+        # Add occasional drip effect (10% chance per frame)
+        if random.random() < 0.03:
+            drip_x = center_x + random.uniform(-radius_x * 0.6, radius_x * 0.6)
+            drip_top = center_y + radius_y * 0.8
+            drip_length = random.randint(3, 6)
+
+            # Draw drip
+            pygame.draw.line(self.screen, base_color,
+                             (drip_x, drip_top),
+                             (drip_x, drip_top + drip_length), 2)
+
+            # Drip droplet at end
+            pygame.draw.circle(self.screen, base_color,
+                               (int(drip_x), int(drip_top + drip_length)), 2)
 
     # -------------------- 电击球绘制 ---------------------
 
     def draw_lightning_ball(self, monster):
-        anim_time = pygame.time.get_ticks()
-        core_color = (255, 255, 0) if (anim_time // 200) % 2 else (255, 215, 0)  # 核心颜色
-        side_tact_color = (255, 255, 100)  # 随机触手颜色
-        lightning_curve_color = (255, 255, 0)  # 外围电弧颜色
-
-        if "异色" in monster.name:
-            core_color = (204, 0, 204)
-            side_tact_color = (51, 51, 255)
-            lightning_curve_color = (255, 0, 255)
-
+        # Base position and animation time
         x = monster.x * TILE_SIZE
         y = monster.y * TILE_SIZE
-        # 动态闪电核心
-        pygame.draw.circle(self.screen, core_color,
-                           (x + TILE_SIZE // 2, y + TILE_SIZE // 2), TILE_SIZE // 3)
+        anim_time = pygame.time.get_ticks()
+        center_x = x + TILE_SIZE // 2
+        center_y = y + TILE_SIZE // 2
 
-        # 随机闪电触手
-        for _ in range(6):
-            angle = random.random() * math.pi * 2
-            length = random.randint(8, 15)
-            start = (x + TILE_SIZE // 2, y + TILE_SIZE // 2)
-            end = (start[0] + math.cos(angle) * length,
-                   start[1] + math.sin(angle) * length)
-            pygame.draw.line(self.screen, side_tact_color, start, end, 2)
+        # Colors based on monster type
+        if "异色" in monster.name:
+            core_color = (0, 210, 255)  # Cyan-blue core
+            outer_color = (0, 150, 200)  # Darker cyan-blue outer
+            arc_color = (120, 230, 255)  # Bright cyan electric arcs
+        else:
+            core_color = (255, 255, 0)  # Yellow core
+            outer_color = (240, 180, 0)  # Darker yellow outer
+            arc_color = (255, 255, 200)  # Electric arcs
 
-        # 外围电弧
-        if random.random() > 0.7:
-            pygame.draw.arc(self.screen, lightning_curve_color,
-                            (x - 5, y - 5, TILE_SIZE + 10, TILE_SIZE + 10),
-                            random.random() * math.pi, random.random() * math.pi, 1)
+        # Pulsing radius
+        base_radius = TILE_SIZE // 3
+        pulse = 0.15 * math.sin(anim_time / 150)
+        radius = base_radius * (1 + pulse)
+
+        # Draw outer glow
+        glow_radius = int(radius * 1.5)
+        pygame.draw.circle(self.screen, outer_color, (center_x, center_y), glow_radius, 1)
+
+        # Draw core layers
+        pygame.draw.circle(self.screen, outer_color, (center_x, center_y), int(radius * 1.2))
+        pygame.draw.circle(self.screen, core_color, (center_x, center_y), int(radius * 0.8))
+
+        # Highlight effect
+        highlight_radius = int(radius * 0.4)
+        pygame.draw.circle(self.screen, arc_color,
+                           (center_x - highlight_radius // 2, center_y - highlight_radius // 2),
+                           highlight_radius)
+
+        # Electric arcs
+        num_arcs = 5 + int(2 * math.sin(anim_time / 400))
+        for i in range(num_arcs):
+            # Calculate starting point on ball surface
+            angle = math.radians(i * (360 / num_arcs) + anim_time / 20)
+            start_x = center_x + math.cos(angle) * radius
+            start_y = center_y + math.sin(angle) * radius
+
+            # Calculate end point with some randomness
+            length = radius * (1.0 + 0.3 * math.sin(anim_time / 250))
+            end_angle = angle + math.radians(random.uniform(-20, 20))
+            end_x = start_x + math.cos(end_angle) * length
+            end_y = start_y + math.sin(end_angle) * length
+
+            # Draw the main arc
+            pygame.draw.line(self.screen, arc_color, (start_x, start_y), (end_x, end_y), 2)
+
+            # Add a simple branch (50% chance)
+            if random.random() < 0.5:
+                branch_angle = end_angle + math.radians(random.uniform(-90, 90))
+                branch_length = length * 0.6
+                branch_x = end_x + math.cos(branch_angle) * branch_length * 0.5
+                branch_y = end_y + math.sin(branch_angle) * branch_length * 0.5
+
+                pygame.draw.line(self.screen, arc_color, (end_x, end_y), (branch_x, branch_y), 1)
+
+        # Add a few random electric particles
+        for _ in range(5):
+            particle_angle = random.uniform(0, math.pi * 2)
+            particle_dist = random.uniform(radius * 0.9, radius * 1.7)
+            particle_x = center_x + math.cos(particle_angle) * particle_dist
+            particle_y = center_y + math.sin(particle_angle) * particle_dist
+
+            pygame.draw.circle(self.screen, arc_color,
+                               (int(particle_x), int(particle_y)),
+                               random.randint(1, 2))
+
+        # Special circular field effect for "异色" variant (occasional)
+        if "异色" in monster.name and random.random() < 0.4:
+            field_radius = radius * 2.0
+            # Draw a simple circular arc
+            start_angle = math.radians((anim_time // 50) % 360)
+            end_angle = start_angle + math.radians(random.randint(30, 180))
+            pygame.draw.arc(self.screen, arc_color,
+                            (center_x - field_radius, center_y - field_radius,
+                             field_radius * 2, field_radius * 2),
+                            start_angle, end_angle, 1)
 
     # -------------------- 魔法师绘制 ---------------------
     def draw_magician_evil(self, monster):
         x = monster.x * TILE_SIZE
         y = monster.y * TILE_SIZE
-        # 长袍主体
-        robe_color = (80, 0, 80)  # 深紫色
-        robe_highlight = (120, 0, 120)
-        pygame.draw.ellipse(self.screen, robe_color,
-                            (x + 5, y + TILE_SIZE // 2, TILE_SIZE - 10, TILE_SIZE))
+        anim_time = pygame.time.get_ticks()
+        center_x = x + TILE_SIZE // 2
+        center_y = y + TILE_SIZE // 2
 
-        # 魔法纹饰
+        # 动态波动效果参数
+        pulse = 0.1 * math.sin(anim_time / 200)
+        eye_glow = abs(math.sin(anim_time / 300))
+
+        # 绘制优雅长袍底部 (更流线型设计)
+        robe_color = (80, 0, 80)  # 深紫色主色
+        robe_highlight = (120, 0, 120)  # 高光色
+        pygame.draw.ellipse(self.screen, robe_color,
+                            (x + 5, y + TILE_SIZE // 2, TILE_SIZE - 10, TILE_SIZE * (1 + pulse)))
+
+        # 神秘魔法纹饰 (更立体的弧线)
         for i in range(3):
-            pygame.draw.arc(self.screen, robe_highlight,
-                            (x + i * 5, y + TILE_SIZE // 2 + i * 3,
-                             TILE_SIZE - 10, TILE_SIZE - 10),
+            arc_rect = (x + i * 5, y + TILE_SIZE // 2 + i * 3, TILE_SIZE - 10, TILE_SIZE - 10)
+            pygame.draw.arc(self.screen, robe_highlight, arc_rect,
                             math.radians(0), math.radians(180), 2)
 
-        # 悬浮法杖
-        staff_x = x + TILE_SIZE // 2
-        staff_y = y + TILE_SIZE // 4
-        pygame.draw.line(self.screen, (150, 150, 150),
-                         (staff_x - 15, staff_y - 5), (staff_x + 15, staff_y + 5), 5)
-        # 魔法水晶
-        crystal_color = (0, 200, 200)
-        pygame.draw.polygon(self.screen, crystal_color, [
-            (staff_x + 15, staff_y + 5),
-            (staff_x + 25, staff_y),
-            (staff_x + 15, staff_y - 5)
-        ])
-        # 水晶辉光
-        for _ in range(5):
-            px = staff_x + 20 + random.randint(-3, 3)
-            py = staff_y + random.randint(-3, 3)
-            pygame.draw.circle(self.screen, (0, 200, 200, 100), (px, py), 2)
-
-        # 毒雾环绕
-        anim_time = pygame.time.get_ticks()
-        for i in range(8):
-            angle = math.radians(anim_time / 10 + i * 45)
-            radius = 20 + 5 * math.sin(anim_time / 200 + i)
-            px = x + TILE_SIZE // 2 + radius * math.cos(angle)
-            py = y + TILE_SIZE // 2 + radius * math.sin(angle)
-            pygame.draw.circle(self.screen, (50, 200, 50, 100), (int(px), int(py)), 3)
-
-        # 兜帽阴影
-        pygame.draw.arc(self.screen, (30, 30, 30),
-                        (x + TILE_SIZE // 4, y, TILE_SIZE // 2, TILE_SIZE // 2),
+        # 神秘兜帽 (更深邃的阴影)
+        hood_rect = (x + TILE_SIZE // 4, y, TILE_SIZE // 2, TILE_SIZE // 2)
+        pygame.draw.arc(self.screen, (30, 30, 30), hood_rect,
                         math.radians(180), math.radians(360), 10)
 
-        # 发光的双眼
-        pygame.draw.circle(self.screen, (0, 200, 200),
-                           (x + TILE_SIZE // 2 - 8, y + TILE_SIZE // 3), 4)
-        pygame.draw.circle(self.screen, (0, 200, 200),
-                           (x + TILE_SIZE // 2 + 8, y + TILE_SIZE // 3), 4)
+        # 发光双眼 (带动态闪烁效果)
+        eye_color = (0, int(200 * eye_glow), int(200 * eye_glow))
+        eye_size = 4 + int(pulse * 10)
+        left_eye_pos = (center_x - 8, y + TILE_SIZE // 3)
+        right_eye_pos = (center_x + 8, y + TILE_SIZE // 3)
+        pygame.draw.circle(self.screen, eye_color, left_eye_pos, eye_size)
+        pygame.draw.circle(self.screen, eye_color, right_eye_pos, eye_size)
+
+        # 魔法水晶法杖 (更精致的设计)
+        staff_x = center_x + int(3 * math.sin(anim_time / 400))  # 微微摇晃的法杖
+        staff_y = y + TILE_SIZE // 4
+        # 法杖主体
+        pygame.draw.line(self.screen, (150, 150, 150),
+                         (staff_x - 15, staff_y - 5), (staff_x + 15, staff_y + 5), 5)
+        # 法杖装饰纹路
+        pygame.draw.line(self.screen, (180, 180, 180),
+                         (staff_x - 10, staff_y - 3), (staff_x + 10, staff_y + 3), 2)
+
+        # 闪耀水晶 (更动态的形状)
+        crystal_color = (0, 200, 200)
+        crystal_points = [
+            (staff_x + 15, staff_y + 5),
+            (staff_x + 25 + int(2 * math.sin(anim_time / 200)), staff_y),
+            (staff_x + 15, staff_y - 5)
+        ]
+        pygame.draw.polygon(self.screen, crystal_color, crystal_points)
+
+        # 水晶辉光 (更自然的光晕)
+        crystal_center = (staff_x + 20, staff_y)
+        for _ in range(3):
+            glow_radius = 4 + random.randint(0, 2)
+            offset_x = random.randint(-3, 3)
+            offset_y = random.randint(-3, 3)
+            pygame.draw.circle(self.screen, (0, 220, 220, 150),
+                               (crystal_center[0] + offset_x, crystal_center[1] + offset_y), glow_radius)
+
+        # 毒雾环绕 (更流畅的粒子效果)
+        for i in range(6):  # 减少粒子数量但增加质量
+            angle = math.radians(anim_time / 10 + i * 60)
+            radius = 20 + 5 * math.sin(anim_time / 200 + i)
+            px = center_x + radius * math.cos(angle)
+            py = center_y + radius * math.sin(angle)
+            # 绘制渐变毒雾粒子
+            size = 3 + int(math.sin(anim_time / 300 + i) * 2)
+            pygame.draw.circle(self.screen, (50, 200, 50, 100), (int(px), int(py)), size)
+            # 添加内部高光
+            pygame.draw.circle(self.screen, (150, 255, 150, 80),
+                               (int(px - 1), int(py - 1)), size // 2)
 
     # -------------------- 魔王绘制 ---------------------
+
     def draw_monster_knight_boss(self, monster):
+        # 基本颜色设置与类型判断
         body_color = (30, 30, 30)  # 黑铁色基底
         trim_color = (80, 80, 80)  # 盔甲镶边
-        if "圣洁" in monster.name:
-            body_color = self.color_reverse(body_color)
+        is_holy = "圣洁" in monster.name
+        if is_holy:
+            body_color = self.color_reverse(body_color)  # 圣洁版本用反色
             trim_color = self.color_reverse(trim_color)
 
-        # 动画参数
+        # 动画与位置参数
         anim_time = pygame.time.get_ticks()
+        x, y = monster.x * TILE_SIZE, monster.y * TILE_SIZE
+        center_x, center_y = x + TILE_SIZE // 2, y + TILE_SIZE // 2  # 中心点，根据TILE_SIZE=35调整
+
+        # 动态特效参数（更增强的动态效果）
         hammer_swing = math.sin(anim_time / 300) * 0.5  # 锤子摆动弧度
-        shield_glow = abs(math.sin(anim_time / 500))  # 盾牌发光强度
+        shield_glow = 0.5 + 0.5 * abs(math.sin(anim_time / 500))  # 盾牌发光强度
         eye_glow = 100 + int(155 * abs(math.sin(anim_time / 200)))  # 眼部红光波动
+        armor_pulse = 1 + 0.08 * math.sin(anim_time / 400)  # 装甲脉动效果增强
 
-        # ---- 基础体型 ----
-        x = monster.x * TILE_SIZE
-        y = monster.y * TILE_SIZE
+        # ==== 躯干与基础护甲 ====
+        # 更加雄壮的躯干（更具威严和霸气）
+        torso_width = int(TILE_SIZE * 0.55)  # ~19像素宽度，进一步增宽
+        torso_height = int(TILE_SIZE * 0.73)  # ~26像素高度，显著增加高度
+        torso_tilt = int(2 * math.sin(anim_time / 800))  # 轻微倾斜效果
 
-        # ---- 头部系统 ----
-        # 带角巨盔
-        helmet_points = [
-            (x + 15, y + 8),  # 左耳
-            (x + 15, y + 4),  # 左角根
-            (x + 8, y - 2),  # 左角尖
-            (x + 24, y - 2),  # 右角尖
-            (x + 17, y + 4),  # 右角根
-            (x + 17, y + 8)  # 右耳
-        ]
-        pygame.draw.polygon(self.screen, (60, 60, 60), helmet_points)
-
-        # 面甲细节
-        pygame.draw.arc(self.screen, (100, 100, 100),
-                        (x + 10, y + 5, 12, 15),
-                        math.radians(220), math.radians(320), 3)  # 面甲开口
-        # 发光红眼
-        pygame.draw.circle(self.screen, (eye_glow, 0, 0),
-                           (x + 16, y + 12), 3)
-
-        # ---- 肩甲系统 ----
-        # 左肩甲（带尖刺）
-        left_pauldron = [
-            (x + 2, y + 18),
-            (x + 8, y + 22),
-            (x + 2, y + 26),
-            (x - 4, y + 22),
-            (x + 2, y + 18)
-        ]
-        pygame.draw.polygon(self.screen, body_color, left_pauldron)
-        pygame.draw.line(self.screen, trim_color,
-                         (x + 2, y + 18), (x + 8, y + 22), 2)
-
-        # 右肩甲（带恶魔浮雕）
-        pygame.draw.rect(self.screen, body_color,
-                         (x + 22, y + 18, 8, 10))
-        # 浮雕细节
-        pygame.draw.line(self.screen, trim_color,
-                         (x + 24, y + 20), (x + 26, y + 24), 2)
-        pygame.draw.line(self.screen, trim_color,
-                         (x + 26, y + 24), (x + 28, y + 20), 2)
-
-        # ---- 身体主装甲 ----
-        # 胸甲主体
-        pygame.draw.rect(self.screen, body_color,
-                         (x + 10, y + 15, 12, 20))
-        # 装甲接缝
-        for i in range(3):
-            y_pos = y + 17 + i * 6
-            pygame.draw.line(self.screen, trim_color,
-                             (x + 10, y_pos), (x + 22, y_pos), 1)
-
-        # 中央符文
-        rune_points = [
-            (x + 16, y + 18), (x + 18, y + 20),
-            (x + 16, y + 22), (x + 14, y + 20)
-        ]
-        pygame.draw.polygon(self.screen, (200, 0, 0), rune_points)
-
-        # ---- 毁灭重锤 ----
-        # 锤柄（带动态摆动）
-        hammer_length = 25
-        hammer_angle = math.radians(30 + hammer_swing * 15)
-        hammer_base = (x + 28, y + 28)  # 右手位置
-        hammer_head = (
-            hammer_base[0] + math.cos(hammer_angle) * hammer_length,
-            hammer_base[1] + math.sin(hammer_angle) * hammer_length
+        # 绘制躯干（带动态呼吸效果）- 位置上移以适应增加的高度
+        torso_rect = pygame.Rect(
+            center_x - torso_width // 2 + torso_tilt,
+            center_y - torso_height // 2 - 2,  # 上移2像素让整体更高
+            torso_width,
+            int(torso_height * armor_pulse)  # 高度随呼吸变化
         )
+        pygame.draw.rect(self.screen, body_color, torso_rect)
 
-        # 锤柄
-        pygame.draw.line(self.screen, (50, 50, 50),
-                         hammer_base, hammer_head, 5)
-
-        # 锤头（带尖刺）
-        pygame.draw.circle(self.screen, (60, 60, 60),
-                           hammer_head, 10)
-        # 尖刺
-        for angle in [0, 90, 180, 270]:
-            spike_end = (
-                hammer_head[0] + math.cos(math.radians(angle)) * 15,
-                hammer_head[1] + math.sin(math.radians(angle)) * 15
-            )
-            pygame.draw.line(self.screen, (80, 80, 80),
-                             hammer_head, spike_end, 3)
-
-        # 锤头裂纹
-        pygame.draw.line(self.screen, (30, 30, 30),
-                         (hammer_head[0] - 5, hammer_head[1] - 5),
-                         (hammer_head[0] + 5, hammer_head[1] + 5), 2)
-
-        # ---- 魔能护盾 ----
-        shield_size = 40 * shield_glow
-        shield_surface = pygame.Surface((40, 40), pygame.SRCALPHA)
-        pygame.draw.ellipse(shield_surface, (100, 0, 0, 100),
-                            (20 - shield_size // 2, 20 - shield_size // 2,
-                             shield_size, shield_size))
-        self.screen.blit(shield_surface, (x - 10, y - 10))
-
-        # ---- 环境互动 ----
-        # 地面裂纹
-        pygame.draw.arc(self.screen, (60, 60, 60),
-                        (x + 5, y + 35, 20, 10),
-                        math.radians(180), math.radians(360), 3)
-        # 环绕黑雾
+        # 装甲接缝与纹路（更加精细的细节）
         for i in range(3):
-            fog_x = x + random.randint(-5, 35)
-            fog_y = y + random.randint(-5, 35)
-            pygame.draw.circle(self.screen, (30, 30, 30, 80),
-                               (fog_x, fog_y), random.randint(3, 6))
+            y_pos = torso_rect.top + 5 + i * (torso_rect.height // 3)
+            pygame.draw.line(self.screen, trim_color,
+                             (torso_rect.left - 1, y_pos),
+                             (torso_rect.right + 1, y_pos), 1)
+
+        # ==== 头部系统 ====
+        # 更为宏伟的头盔尺寸
+        helmet_width = int(TILE_SIZE * 0.5)  # ~18像素宽度，接近躯干宽度
+        helmet_height = int(TILE_SIZE * 0.32)  # ~11像素高度，明显增高
+
+        # 头盔位置（微微晃动增加生命感）- 进一步上移，增加整体高度
+        helmet_x = center_x - helmet_width // 2 + int(math.sin(anim_time / 600) * 2)
+        helmet_y = torso_rect.top - helmet_height - 3  # 上移1像素，增加身高
+
+        # 带角巨盔（更长、更锋利的角设计，增强威慑力）
+        horn_length = int(TILE_SIZE * 0.38)  # ~13像素角长度，更长的角
+        horn_angle_left = math.radians(130 + math.sin(anim_time / 700) * 5)  # 左角动态角度（更水平）
+        horn_angle_right = math.radians(50 - math.sin(anim_time / 700) * 5)  # 右角动态角度（更水平）
+
+        helmet_points = [
+            (helmet_x, helmet_y + helmet_height),  # 左下
+            (helmet_x, helmet_y),  # 左上
+            (helmet_x + horn_length * math.cos(horn_angle_left), helmet_y + horn_length * math.sin(horn_angle_left)),
+            # 左角尖
+            (helmet_x + helmet_width + horn_length * math.cos(horn_angle_right),
+             helmet_y + horn_length * math.sin(horn_angle_right)),  # 右角尖
+            (helmet_x + helmet_width, helmet_y),  # 右上
+            (helmet_x + helmet_width, helmet_y + helmet_height)  # 右下
+        ]
+        pygame.draw.polygon(self.screen, (50, 50, 50), helmet_points)  # 绘制头盔主体
+
+        # 面甲与发光双眼（邪恶的注视）
+        visor_width = int(helmet_width * 0.8)
+        visor_height = int(helmet_height * 0.7)
+        visor_x = helmet_x + (helmet_width - visor_width) // 2
+        visor_y = helmet_y + helmet_height - 1
+
+        # 面甲开口
+        pygame.draw.arc(self.screen, (100, 100, 100),
+                        (visor_x, visor_y, visor_width, visor_height),
+                        math.radians(220), math.radians(320), 2)
+
+        # 发光红眼（更加明亮，带脉动效果）
+        eye_size = 2 + int(math.sin(anim_time / 200) * 1.5)  # 动态眼睛大小
+        eye_color = (eye_glow, 0, 0) if not is_holy else (0, 0, eye_glow)  # 根据类型变化眼色
+        pygame.draw.circle(self.screen, eye_color,
+                           (center_x - 5, visor_y + visor_height // 2), eye_size)
+        pygame.draw.circle(self.screen, eye_color,
+                           (center_x + 5, visor_y + visor_height // 2), eye_size)
+
+        # ==== 肩甲系统 ====
+        pauldron_size = int(TILE_SIZE * 0.45)  # ~16像素，极为宽大的肩甲
+        left_pauldron_x = torso_rect.left - pauldron_size // 2 - 2  # 左移2像素，扩展整体宽度
+        left_pauldron_y = torso_rect.top - 1  # 上移1像素，扩展肩甲高度
+
+        # 左肩甲形状改为更宽大的六边形，增强视觉体积感
+        left_pauldron_points = [
+            (left_pauldron_x + pauldron_size // 3, left_pauldron_y - 3),  # 上点上移
+            (left_pauldron_x - 2, left_pauldron_y + pauldron_size // 3),  # 左点左移
+            (left_pauldron_x, left_pauldron_y + pauldron_size),  # 左下
+            (left_pauldron_x + pauldron_size // 2, left_pauldron_y + pauldron_size + 3),  # 下点下移
+            (left_pauldron_x + pauldron_size, left_pauldron_y + pauldron_size),  # 右下
+            (left_pauldron_x + pauldron_size + 2, left_pauldron_y + pauldron_size // 3),  # 右点右移
+        ]
+        pygame.draw.polygon(self.screen, body_color, left_pauldron_points)
+
+        # 肩甲装饰尖刺
+        spike_length = int(TILE_SIZE * 0.2)  # ~7像素
+        spike_angle = math.radians(225 + math.sin(anim_time / 500) * 10)
+        spike_end = (
+            left_pauldron_x + spike_length * math.cos(spike_angle),
+            left_pauldron_y + pauldron_size // 2 + spike_length * math.sin(spike_angle)
+        )
+        pygame.draw.line(self.screen, trim_color,
+                         (left_pauldron_x, left_pauldron_y + pauldron_size // 2),
+                         spike_end, 2)
+
+        # 右肩甲（魔纹浮雕）- 超大化处理
+        right_pauldron_x = torso_rect.right - pauldron_size // 2 + 2  # 右移2像素，进一步扩展宽度
+        right_pauldron_y = torso_rect.top - 1  # 上移1像素，与左肩同高
+        # 使用梯形而非矩形，增加立体感和威严
+        right_pauldron_points = [
+            (right_pauldron_x, right_pauldron_y - 3),  # 左上角上移
+            (right_pauldron_x + pauldron_size + 2, right_pauldron_y),  # 右上角右移
+            (right_pauldron_x + pauldron_size, right_pauldron_y + pauldron_size + 3),  # 右下角下移
+            (right_pauldron_x - 2, right_pauldron_y + pauldron_size),  # 左下角左移
+        ]
+        pygame.draw.polygon(self.screen, body_color, right_pauldron_points)
+
+        # 魔纹浮雕（闪烁的符文）
+        if anim_time % 1000 < 800:  # 间歇性闪烁
+            rune_color = (200, 0, 0) if not is_holy else (0, 150, 255)
+            rune_size = int(TILE_SIZE * 0.1)  # ~3-4像素
+
+            # V字形符文
+            pygame.draw.line(self.screen, rune_color,
+                             (right_pauldron_x + pauldron_size // 2 - rune_size, right_pauldron_y + rune_size),
+                             (right_pauldron_x + pauldron_size // 2, right_pauldron_y + pauldron_size - rune_size), 2)
+            pygame.draw.line(self.screen, rune_color,
+                             (right_pauldron_x + pauldron_size // 2 + rune_size, right_pauldron_y + rune_size),
+                             (right_pauldron_x + pauldron_size // 2, right_pauldron_y + pauldron_size - rune_size), 2)
+
+        # ==== 中央符文 ====
+        # 更大更明显的脉动符文
+        rune_scale = 1 + 0.3 * math.sin(anim_time / 250)  # 符文脉动效果
+        rune_size = int(TILE_SIZE * 0.13 * rune_scale)  # ~5-6像素，更大的符文核心
+        rune_color = (200, 0, 0) if not is_holy else (0, 150, 255)
+
+        # 菱形符文
+        rune_points = [
+            (center_x, center_y - rune_size),  # 上
+            (center_x + rune_size, center_y),  # 右
+            (center_x, center_y + rune_size),  # 下
+            (center_x - rune_size, center_y)  # 左
+        ]
+        pygame.draw.polygon(self.screen, rune_color, rune_points)
+
+        # 符文光晕效果
+        if anim_time % 800 < 400:  # 间歇性光晕
+            glow_size = rune_size + 2
+            glow_alpha = int(100 * math.sin(anim_time / 200))
+            glow_color = (*rune_color[:2], 0, glow_alpha)  # 提取RGB，添加Alpha
+
+            try:  # 尝试绘制带透明度的光晕
+                glow_surf = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
+                pygame.draw.polygon(glow_surf, glow_color, [
+                    (glow_size, 0),
+                    (glow_size * 2, glow_size),
+                    (glow_size, glow_size * 2),
+                    (0, glow_size)
+                ])
+                self.screen.blit(glow_surf, (center_x - glow_size, center_y - glow_size))
+            except:
+                pass  # 如果不支持透明度，则跳过光晕效果
+
+        # ==== 下半身烟雾系统（虚化灵魂效果）====
+        mist_height = int(TILE_SIZE * 0.7)  # 烟雾高度
+        mist_base_y = torso_rect.bottom - 3  # 烟雾起始位置（略微与躯干重叠）
+        mist_max_width = torso_width * 1.4  # 烟雾最大宽度（略大于躯干）
+
+        # 绘制多层烟雾，从密到稀
+        for i in range(5):
+            # 烟雾渐变尺寸和透明度 - 降低透明度使烟雾更明显
+            layer_ratio = (5 - i) / 5  # 从底部向上渐变（1.0到0.2）
+            mist_width = int(mist_max_width * (0.5 + layer_ratio * 0.5))  # 下宽上窄
+            mist_alpha = int(170 * layer_ratio)  # 透明度提高到170，更清晰可见
+
+            # 烟雾漂浮动态效果 - 减缓移动速度
+            drift_x = int(math.sin(anim_time / 800 + i) * 2)  # 横向漂移减慢(500->800)，幅度减小(3->2)
+            layer_y = mist_base_y + int(mist_height * i / 5)  # 每层位置
+            wave_effect = int(math.sin(anim_time / 500 + i * 0.7) * 2)  # 波动效果减缓(300->500)，幅度减小(3->2)
+
+            # 烟雾颜色 - 根据类型使用不同颜色，增强颜色饱和度
+            if is_holy:
+                mist_color = (170, 170, 240, mist_alpha)  # 更亮的蓝紫色烟雾（圣洁版）
+            else:
+                mist_color = (70, 70, 70, mist_alpha)  # 更亮的暗黑烟雾（普通版）
+
+            try:
+                # 创建烟雾层
+                mist_surf = pygame.Surface((mist_width, int(mist_height / 5)), pygame.SRCALPHA)
+                pygame.draw.ellipse(mist_surf, mist_color, (0, 0, mist_width, int(mist_height / 5)))
+
+                # 绘制带有波动效果的烟雾层
+                self.screen.blit(mist_surf, (
+                    center_x - mist_width // 2 + drift_x + wave_effect,
+                    layer_y
+                ))
+
+                # 随机添加小烟雾粒子（增加动态感）
+                if random.random() < 0.4:
+                    particle_size = random.randint(3, 5)  # 增大粒子(2-4->3-5)使其更明显
+                    particle_x = center_x + random.randint(-mist_width // 2, mist_width // 2)
+                    particle_y = layer_y + random.randint(-3, 3)
+                    particle_alpha = random.randint(150, 200)  # 提高透明度(30-100->150-200)更清晰
+
+                    particle_surf = pygame.Surface((particle_size * 2, particle_size * 2), pygame.SRCALPHA)
+                    if is_holy:
+                        particle_color = (220, 220, 255, particle_alpha)  # 更亮的粒子颜色
+                    else:
+                        particle_color = (100, 100, 100, particle_alpha)  # 更亮的粒子颜色
+
+                    pygame.draw.circle(particle_surf, particle_color,
+                                       (particle_size, particle_size), particle_size)
+                    self.screen.blit(particle_surf, (particle_x - particle_size, particle_y - particle_size))
+            except:
+                # 备用简单烟雾（不支持透明度时）
+                simple_width = mist_width // 2
+                simple_color = (150, 150, 220) if is_holy else (70, 70, 70)
+                pygame.draw.ellipse(self.screen, simple_color,
+                                    (center_x - simple_width // 2 + drift_x, layer_y,
+                                     simple_width, mist_height // 10))
+
+        # ==== 毁灭重锤 ====
+        # 更巨大的毁灭重锤（体现力量与压迫感）
+        hammer_length = int(TILE_SIZE * 0.85)  # ~30像素，更长的锤柄
+        hammer_angle = math.radians(30 + hammer_swing * 15)
+        hammer_base_x = torso_rect.right + 4
+        hammer_base_y = torso_rect.bottom - 5
+
+        hammer_head_x = hammer_base_x + math.cos(hammer_angle) * hammer_length
+        hammer_head_y = hammer_base_y + math.sin(hammer_angle) * hammer_length
+
+        # 锤柄（带纹理）- 更粗壮
+        pygame.draw.line(self.screen, (50, 50, 50),
+                         (hammer_base_x, hammer_base_y),
+                         (hammer_head_x, hammer_head_y), 5)  # 增加线宽
+
+        # 锤头（更具威慑力）- 更大
+        hammer_head_size = int(TILE_SIZE * 0.33)  # ~12像素，更大的锤头
+        pygame.draw.circle(self.screen, (60, 60, 60),
+                           (int(hammer_head_x), int(hammer_head_y)), hammer_head_size)
+
+        # 锤头尖刺（动态伸缩）
+        for i, angle in enumerate([0, 90, 180, 270]):
+            spike_phase = anim_time / 400 + i * math.pi / 2
+            spike_length = int(TILE_SIZE * 0.3 * (0.8 + 0.2 * math.sin(spike_phase)))  # ~10像素，动态变化
+
+            rad_angle = math.radians(angle)
+            spike_end_x = hammer_head_x + math.cos(rad_angle) * spike_length
+            spike_end_y = hammer_head_y + math.sin(rad_angle) * spike_length
+
+            spike_color = (100, 100, 100) if not is_holy else (200, 200, 200)
+            pygame.draw.line(self.screen, spike_color,
+                             (int(hammer_head_x), int(hammer_head_y)),
+                             (int(spike_end_x), int(spike_end_y)), 3)
+
+        # 锤头裂纹与魔纹（更具魔性）
+        if not is_holy:  # 只有普通魔王有裂纹
+            crack_offset = int(math.sin(anim_time / 300) * 2)  # 裂纹抖动
+            pygame.draw.line(self.screen, (30, 30, 30),
+                             (hammer_head_x - hammer_head_size // 2 + crack_offset,
+                              hammer_head_y - hammer_head_size // 2),
+                             (hammer_head_x + hammer_head_size // 2,
+                              hammer_head_y + hammer_head_size // 2 - crack_offset), 2)
+        else:  # 圣洁魔王有魔法纹路
+            glow_intensity = int(150 + 100 * abs(math.sin(anim_time / 300)))  # 保证值在150-250范围内
+            pygame.draw.circle(self.screen, (200, 200, 255),
+                               (int(hammer_head_x), int(hammer_head_y)), hammer_head_size // 2, 1)
+
+        # ==== 魔能护盾 ====
+        # 动态脉动的能量场 - 更大范围的能量场
+        shield_radius = int(TILE_SIZE * 0.75 * shield_glow)  # ~26像素，随时间变化，更大范围
+        try:
+            shield_surface = pygame.Surface((shield_radius * 2, shield_radius * 2), pygame.SRCALPHA)
+            shield_color = (0, 100, 200, 70) if is_holy else (200, 0, 0, 70)  # 根据类型改变颜色
+
+            # 多层护盾效果
+            for i in range(3):
+                layer_alpha = 70 - i * 20
+                layer_radius = shield_radius - i * 3
+                pygame.draw.circle(shield_surface, (*shield_color[:3], layer_alpha),
+                                   (shield_radius, shield_radius), layer_radius)
+
+            self.screen.blit(shield_surface, (center_x - shield_radius, center_y - shield_radius))
+        except:
+            # 备用简单护盾（无透明度）
+            shield_color_simple = (0, 100, 200) if is_holy else (200, 0, 0)
+            pygame.draw.circle(self.screen, shield_color_simple,
+                               (center_x, center_y), int(shield_radius * 0.7), 1)
+
+        # ==== 环境影响效果 ====
+        # 地面裂纹（显示力量压迫）- 调整到烟雾下方
+        mist_bottom = mist_base_y + mist_height  # 获取烟雾底部位置
+        crack_width = int(TILE_SIZE * 0.6 + TILE_SIZE * 0.1 * math.sin(anim_time / 600))  # 动态裂纹宽度
+        pygame.draw.arc(self.screen, (60, 60, 60),
+                        (center_x - crack_width // 2, mist_bottom - 5,
+                         crack_width, TILE_SIZE * 0.25),
+                        math.radians(180), math.radians(360), 3)
+
+        # 环绕气息效果（邪能/圣光）
+        if anim_time % 400 < 200:  # 间歇性气息释放
+            fog_color = (30, 30, 30, 80) if not is_holy else (255, 255, 200, 50)
+            for _ in range(2):  # 少量但高质量的粒子
+                fog_distance = TILE_SIZE * (0.3 + 0.5 * random.random()) * shield_glow
+                fog_angle = random.uniform(0, math.pi * 2)
+                fog_x = center_x + math.cos(fog_angle) * fog_distance
+                fog_y = center_y + math.sin(fog_angle) * fog_distance
+                fog_size = int(TILE_SIZE * 0.1 * (0.8 + 0.4 * shield_glow))  # ~4-5像素
+
+                try:
+                    fog_surf = pygame.Surface((fog_size * 2, fog_size * 2), pygame.SRCALPHA)
+                    pygame.draw.circle(fog_surf, fog_color, (fog_size, fog_size), fog_size)
+                    self.screen.blit(fog_surf, (fog_x - fog_size, fog_y - fog_size))
+                except:
+                    # 备用实心粒子
+                    simple_color = (30, 30, 30) if not is_holy else (200, 200, 150)
+                    pygame.draw.circle(self.screen, simple_color, (int(fog_x), int(fog_y)), fog_size // 2)
 
     # -------------------- 普通巨龙绘制 ---------------------
+
     def draw_dragon_boss(self, monster):
         x = monster.x * TILE_SIZE
         y = monster.y * TILE_SIZE
-        # 动画参数
+        # 动画和基础参数
         anim_time = pygame.time.get_ticks()
-        wing_angle = math.sin(anim_time / 200) * 0.3  # 翅膀摆动弧度
-        flame_phase = int((anim_time % 300) / 100)  # 三阶段火焰循环
-        eye_glow = abs(math.sin(anim_time / 500))  # 眼睛发光强度
+        wing_flap = math.sin(anim_time / 300) * 0.3  # 翅膀摆动弧度
+        breath_phase = int((anim_time % 600) / 120)  # 五阶段火焰循环
+        eye_glow = abs(math.sin(anim_time / 400))  # 眼睛发光强度
+        body_pulse = 0.03 * math.sin(anim_time / 500)  # 身体微弱起伏效果
+        neck_sway = math.sin(anim_time / 850) * 0.1  # 脖子摆动效果
 
-        # ---- 基础体型(3x3) ----
-        # 身体主骨架
-        body_color = (80, 20, 30)  # 暗红色基底
-        pygame.draw.ellipse(self.screen, body_color,
-                            (x + TILE_SIZE, y + TILE_SIZE, TILE_SIZE, TILE_SIZE))  # 躯干
+        # 根据TILE_SIZE调整比例
+        scale_factor = TILE_SIZE / 35  # 基于原始TILE_SIZE=35的比例调整
 
-        # ---- 动态双翼系统 ----
-        # 左翼
-        left_wing = [
-            (x + TILE_SIZE, y + TILE_SIZE),  # 翼根
-            (x + int(TILE_SIZE * 0.5), y + int(TILE_SIZE * 0.5) + int(10 * wing_angle)),  # 翼尖
-            (x + TILE_SIZE, y + TILE_SIZE * 2)
-        ]
-        # 右翼
-        right_wing = [
-            (x + TILE_SIZE * 2, y + TILE_SIZE),
-            (x + int(TILE_SIZE * 2.5), y + int(TILE_SIZE * 0.5) + int(10 * wing_angle)),
-            (x + TILE_SIZE * 2, y + TILE_SIZE * 2)
-        ]
+        # ---- 阴影效果 ----
+        shadow_surf = pygame.Surface((TILE_SIZE * 3, TILE_SIZE * 0.8), pygame.SRCALPHA)
+        shadow_ellipse = (TILE_SIZE * 0.5, 0, TILE_SIZE * 2, TILE_SIZE * 0.4)
+        pygame.draw.ellipse(shadow_surf, (0, 0, 0, 70), shadow_ellipse)  # 半透明阴影
+        self.screen.blit(shadow_surf, (x, y + TILE_SIZE * 2.5))
 
-        # 翼膜绘制（带渐变透明）
-        for wing in [left_wing, right_wing]:
-            pygame.draw.polygon(self.screen, (150, 40, 40), wing)  # 翼膜
-            pygame.draw.polygon(self.screen, (100, 20, 20), wing, 2)  # 翼骨
+        # ---- 身体主体 ----
+        body_width = int(TILE_SIZE * 1.2 * (1 + body_pulse))
+        body_height = int(TILE_SIZE * 0.8 * (1 + body_pulse))
+        body_x = x + TILE_SIZE - body_width * 0.3
+        body_y = y + TILE_SIZE * 1.5
 
-        # ---- 头部细节 ----
-        # 龙头
-        head_radius = TILE_SIZE // 3
-        head_center = (x + TILE_SIZE * 2, y + TILE_SIZE // 2)
-        pygame.draw.circle(self.screen, body_color, head_center, head_radius)
+        # ---- 尾部 ----
+        tail_width = int(TILE_SIZE * 0.3)
+        tail_base_x = body_x + body_width * 0.1
+        tail_base_y = body_y + body_height * 0.5
 
-        # 龙眼
-        eye_radius = head_radius // 3
-        eye_center = (head_center[0] - eye_radius, head_center[1] - eye_radius)
-        pygame.draw.circle(self.screen, (255, 240, 200), eye_center, eye_radius)  # 眼白
-        pygame.draw.circle(self.screen, (200 * eye_glow, 0, 0), eye_center, eye_radius // 2)  # 瞳孔
-
-        # 龙角
-        pygame.draw.polygon(self.screen, (100, 80, 60), [
-            (head_center[0] - head_radius, head_center[1] - head_radius),
-            (head_center[0] - head_radius // 2, head_center[1] - head_radius * 2),
-            (head_center[0], head_center[1] - head_radius)
-        ])
-
-        # ---- 火焰喷射系统 ----
-        if flame_phase > 0:  # 脉冲式火焰
-            flame_length = TILE_SIZE // 2 * (1 + 0.5 * flame_phase)
-            flame_points = [
-                (head_center[0], head_center[1] + head_radius),
-                (head_center[0] - flame_length // 2, head_center[1] + head_radius + flame_length),
-                (head_center[0] + flame_length // 2, head_center[1] + head_radius + flame_length)
-            ]
-            pygame.draw.polygon(self.screen, (255, 80 + flame_phase * 50, 0), flame_points)
-
-        # ---- 尾部细节 ----
         tail_points = [
-            (x + TILE_SIZE, y + TILE_SIZE * 2),
-            (x + TILE_SIZE // 2, y + TILE_SIZE * 3),
-            (x + TILE_SIZE * 1.5, y + TILE_SIZE * 3)
+            (tail_base_x, tail_base_y),  # 尾部根部连接到身体
+            (tail_base_x - TILE_SIZE * 0.6, body_y + body_height + TILE_SIZE * 0.2),  # 尾部中段
+            (tail_base_x - TILE_SIZE * 1.0, body_y + body_height + TILE_SIZE * 0.4),  # 尾部末端
+            (tail_base_x - TILE_SIZE * 1.2, body_y + body_height + TILE_SIZE * 0.2)  # 尾部尖端
         ]
-        pygame.draw.polygon(self.screen, body_color, tail_points)
 
-        # ---- 地面阴影 ----
-        shadow = pygame.Surface((TILE_SIZE * 3, TILE_SIZE * 3), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow, (0, 0, 0, 80),
-                            (x + TILE_SIZE // 2, y + TILE_SIZE * 2, TILE_SIZE * 2, TILE_SIZE // 2))
-        self.screen.blit(shadow, (x, y))
+        # 尾部摆动效果
+        tail_swing = math.sin(anim_time / 450) * (TILE_SIZE * 0.2)  # 摆动幅度
+        for i in range(1, len(tail_points)):
+            # 越往后的部分摆动幅度越大
+            swing_amount = tail_swing * (i / len(tail_points))
+            tail_points[i] = (tail_points[i][0] + swing_amount, tail_points[i][1])
+
+        # 绘制尾部
+        pygame.draw.polygon(self.screen, (110, 30, 30), tail_points)
+
+        # 尾部棘刺 - 更多更明显的棘刺
+        for i in range(3):
+            # 计算棘刺位置 - 沿着尾部曲线分布
+            if i < len(tail_points) - 1:
+                spike_base_x = (tail_points[i][0] + tail_points[i + 1][0]) / 2
+                spike_base_y = (tail_points[i][1] + tail_points[i + 1][1]) / 2
+
+                # 棘刺指向 - 垂直于尾部方向
+                dx = tail_points[i + 1][0] - tail_points[i][0]
+                dy = tail_points[i + 1][1] - tail_points[i][1]
+                length = max(1, math.sqrt(dx * dx + dy * dy))
+
+                # 归一化并旋转90度
+                nx, ny = -dy / length, dx / length
+
+                # 棘刺尺寸随着尾部位置变化
+                spike_length = TILE_SIZE * 0.2 * (1 - i / len(tail_points))
+
+                spike_tip_x = spike_base_x + nx * spike_length
+                spike_tip_y = spike_base_y + ny * spike_length
+
+                pygame.draw.line(self.screen, (140, 50, 40),
+                                 (spike_base_x, spike_base_y),
+                                 (spike_tip_x, spike_tip_y),
+                                 max(1, int(3 * scale_factor)))
+
+        # ---- 绘制身体 ----
+        # 身体主体
+        pygame.draw.ellipse(self.screen, (130, 50, 50), (body_x, body_y, body_width, body_height))
+
+        # 身体鳞片纹理 - 更明显的龙鳞
+        for i in range(3):
+            for j in range(4):
+                scale_x = int(body_x + j * body_width * 0.25 + (i % 2) * (body_width * 0.125))
+                scale_y = int(body_y + i * body_height * 0.33)
+
+                # 鳞片形状 - 菱形或半圆
+                if random.random() > 0.5:
+                    # 菱形鳞片
+                    scale_size = int(TILE_SIZE * 0.08)
+                    scale_points = [
+                        (scale_x, scale_y - scale_size),
+                        (scale_x + scale_size, scale_y),
+                        (scale_x, scale_y + scale_size),
+                        (scale_x - scale_size, scale_y)
+                    ]
+                    scale_color = (
+                        110 + random.randint(-15, 15),
+                        40 + random.randint(-10, 10),
+                        40 + random.randint(-10, 10)
+                    )
+                    pygame.draw.polygon(self.screen, scale_color, scale_points)
+                    # 鳞片高光
+                    pygame.draw.line(self.screen, (scale_color[0] + 30, scale_color[1] + 20, scale_color[2] + 20),
+                                     scale_points[0], scale_points[1], 1)
+                else:
+                    # 半圆鳞片
+                    scale_size = int(TILE_SIZE * 0.07)
+                    scale_color = (
+                        100 + random.randint(-10, 10),
+                        35 + random.randint(-5, 5),
+                        35 + random.randint(-5, 5)
+                    )
+                    pygame.draw.circle(self.screen, scale_color, (scale_x, scale_y), scale_size)
+                    pygame.draw.line(self.screen, (scale_color[0] + 25, scale_color[1] + 15, scale_color[2] + 15),
+                                     (scale_x - scale_size / 2, scale_y - scale_size / 2),
+                                     (scale_x + scale_size / 2, scale_y - scale_size / 2), 1)
+
+        # 背部脊刺 - 龙的典型特征
+        spine_count = 4
+        for i in range(spine_count):
+            spine_base_x = body_x + body_width * (0.3 + 0.5 * i / spine_count)
+            spine_base_y = body_y - body_height * 0.1
+
+            # 脊刺高度随位置变化
+            spine_height = TILE_SIZE * 0.3 * (1 - abs(i - spine_count / 2) / (spine_count / 2))
+
+            spine_tip_x = spine_base_x
+            spine_tip_y = spine_base_y - spine_height
+
+            pygame.draw.line(self.screen, (140, 55, 45),
+                             (spine_base_x, spine_base_y),
+                             (spine_tip_x, spine_tip_y),
+                             max(1, int(3 * scale_factor)))
+
+        # ---- 翅膀系统 ----
+        # 翅膀基点连接到身体
+        wing_base_left = (body_x + body_width * 0.3, body_y + body_height * 0.2)
+        wing_base_right = (body_x + body_width * 0.7, body_y + body_height * 0.2)
+
+        # 翅膀形态参数 - 更大更有力的翅膀
+        wing_length = TILE_SIZE * 1.2
+        wing_width = TILE_SIZE * 0.7
+
+        # 左翼 - 带动态翅膀弯曲
+        left_wing_tip_x = wing_base_left[0] - wing_length * math.cos(wing_flap)
+        left_wing_tip_y = wing_base_left[1] - wing_length * math.sin(wing_flap * 0.8)
+        left_wing_mid_x = wing_base_left[0] - wing_length * 0.6 * math.cos(wing_flap + 0.2)
+        left_wing_mid_y = wing_base_left[1] - wing_length * 0.4 * math.sin(wing_flap * 0.8 + 0.2)
+
+        left_wing = [
+            wing_base_left,
+            (left_wing_mid_x, left_wing_mid_y),
+            (left_wing_tip_x, left_wing_tip_y),
+            (left_wing_mid_x - wing_width * 0.3, left_wing_mid_y + wing_width * 0.5),
+            (wing_base_left[0] - wing_width * 0.2, wing_base_left[1] + wing_width * 0.3)
+        ]
+
+        # 右翼 - 带动态翅膀弯曲
+        right_wing_tip_x = wing_base_right[0] + wing_length * math.cos(wing_flap)
+        right_wing_tip_y = wing_base_right[1] - wing_length * math.sin(wing_flap * 0.8)
+        right_wing_mid_x = wing_base_right[0] + wing_length * 0.6 * math.cos(wing_flap + 0.2)
+        right_wing_mid_y = wing_base_right[1] - wing_length * 0.4 * math.sin(wing_flap * 0.8 + 0.2)
+
+        right_wing = [
+            wing_base_right,
+            (right_wing_mid_x, right_wing_mid_y),
+            (right_wing_tip_x, right_wing_tip_y),
+            (right_wing_mid_x + wing_width * 0.3, right_wing_mid_y + wing_width * 0.5),
+            (wing_base_right[0] + wing_width * 0.2, wing_base_right[1] + wing_width * 0.3)
+        ]
+
+        # 绘制翅膀
+        for wing in [left_wing, right_wing]:
+            # 翅膀与身体的连接部分
+            connect_x = wing[0][0]
+            connect_y = wing[0][1]
+            connect_radius = TILE_SIZE * 0.12
+            pygame.draw.circle(self.screen, (140, 50, 50), (int(connect_x), int(connect_y)), int(connect_radius))
+
+            # 翅膀膜 - 半透明效果
+            wing_color = (160, 60, 60)
+            # 绘制主膜
+            pygame.draw.polygon(self.screen, wing_color, wing)
+
+            # 翅膀骨架 - 更多的翅骨
+            for i in range(min(4, len(wing) - 1)):
+                pygame.draw.line(self.screen, (100, 40, 40),
+                                 wing[0], wing[i + 1],
+                                 max(1, int(2 * scale_factor)))
+
+            # 翅膀纹理 - 类似蝙蝠翅膀的膜纹理
+            for i in range(3):
+                fold_start_idx = random.randint(0, len(wing) - 2)
+                fold_end_idx = random.randint(fold_start_idx + 1, len(wing) - 1)
+
+                # 确保不是重复的线
+                if fold_start_idx != fold_end_idx:
+                    fold_color = (120, 40, 40, 180)
+                    pygame.draw.line(self.screen, fold_color,
+                                     wing[fold_start_idx], wing[fold_end_idx], 1)
+
+        # ---- 脖子系统 - 突出显示长脖子，这是龙的典型特征 ----
+        # 脖子基点连接到身体
+        neck_base_x = body_x + body_width * 0.7
+        neck_base_y = body_y + body_height * 0.3
+
+        # 脖子终点（头部连接处）
+        neck_end_x = body_x + body_width + TILE_SIZE * 0.5 + neck_sway * TILE_SIZE
+        neck_end_y = body_y - TILE_SIZE * 0.2
+
+        # 脖子弯曲控制点
+        neck_ctrl1_x = neck_base_x + (neck_end_x - neck_base_x) * 0.3
+        neck_ctrl1_y = neck_base_y - TILE_SIZE * 0.3
+
+        neck_ctrl2_x = neck_base_x + (neck_end_x - neck_base_x) * 0.7
+        neck_ctrl2_y = neck_end_y + TILE_SIZE * 0.2
+
+        # 生成脖子曲线点
+        neck_points = []
+        neck_width = TILE_SIZE * 0.25  # 脖子宽度
+
+        # 生成贝塞尔曲线描述脖子
+        segments = 8
+        for i in range(segments + 1):
+            t = i / segments
+            # 三次贝塞尔曲线公式
+            px = (1 - t) ** 3 * neck_base_x + 3 * (1 - t) ** 2 * t * neck_ctrl1_x + 3 * (
+                        1 - t) * t ** 2 * neck_ctrl2_x + t ** 3 * neck_end_x
+            py = (1 - t) ** 3 * neck_base_y + 3 * (1 - t) ** 2 * t * neck_ctrl1_y + 3 * (
+                        1 - t) * t ** 2 * neck_ctrl2_y + t ** 3 * neck_end_y
+            neck_points.append((px, py))
+
+        # 绘制脖子主体
+        if len(neck_points) > 1:
+            for i in range(len(neck_points) - 1):
+                # 脖子宽度沿长度逐渐变窄
+                segment_width = neck_width * (1 - 0.4 * i / segments)
+
+                # 获取当前线段的方向
+                dx = neck_points[i + 1][0] - neck_points[i][0]
+                dy = neck_points[i + 1][1] - neck_points[i][1]
+                # 线段长度
+                segment_len = max(0.001, math.sqrt(dx * dx + dy * dy))
+                # 单位方向向量
+                dx, dy = dx / segment_len, dy / segment_len
+                # 垂直方向向量
+                nx, ny = -dy, dx
+
+                # 计算脖子线段的四个角点
+                neck_segment = [
+                    (neck_points[i][0] + nx * segment_width / 2, neck_points[i][1] + ny * segment_width / 2),
+                    (neck_points[i + 1][0] + nx * segment_width / 2, neck_points[i + 1][1] + ny * segment_width / 2),
+                    (neck_points[i + 1][0] - nx * segment_width / 2, neck_points[i + 1][1] - ny * segment_width / 2),
+                    (neck_points[i][0] - nx * segment_width / 2, neck_points[i][1] - ny * segment_width / 2)
+                ]
+
+                # 绘制脖子段
+                pygame.draw.polygon(self.screen, (125, 45, 45), neck_segment)
+
+                # 脖子关节鳞片 - 每隔一段绘制
+                if i % 2 == 0:
+                    mid_x = (neck_segment[0][0] + neck_segment[3][0]) / 2
+                    mid_y = (neck_segment[0][1] + neck_segment[3][1]) / 2
+
+                    scale_size = segment_width * 0.7
+                    scale_color = (140, 55, 45)
+
+                    pygame.draw.ellipse(self.screen, scale_color,
+                                        (mid_x - scale_size / 2, mid_y - scale_size / 2, scale_size, scale_size))
+
+        # ---- 头部系统 ----
+        head_radius = int(TILE_SIZE * 0.32)
+        # 头部位置：脖子末端
+        head_center = (neck_end_x, neck_end_y)
+
+        # 绘制头部 - 更加细长的龙头
+        head_length = head_radius * 2.8
+        head_height = head_radius * 1.6
+
+        head_rect = (
+            head_center[0] - head_radius * 0.5,  # 向后偏移
+            head_center[1] - head_height / 2,
+            head_length,
+            head_height
+        )
+        pygame.draw.ellipse(self.screen, (135, 52, 52), head_rect)
+
+        # 加强头部与脖子的连接
+        neck_join_radius = head_radius * 0.8
+        pygame.draw.circle(self.screen, (130, 50, 50),
+                           (int(head_center[0]), int(head_center[1])),
+                           int(neck_join_radius))
+
+        # 眼睛 - 更有神的龙眼
+        eye_radius = max(2, int(head_radius * 0.4))
+        eye_center = (head_center[0] + head_radius * 0.4, head_center[1] - head_radius * 0.2)
+
+        # 眼眶
+        pygame.draw.circle(self.screen, (90, 30, 30), eye_center, eye_radius * 1.2)
+
+        # 眼白
+        pygame.draw.circle(self.screen, (240, 240, 220), eye_center, eye_radius)
+
+        # 动态瞳孔 - 竖直的龙瞳
+        pupil_offset_x = math.sin(anim_time / 1700) * (eye_radius * 0.3)
+        pupil_offset_y = math.cos(anim_time / 1500) * (eye_radius * 0.2)
+        pupil_center = (
+            int(eye_center[0] + pupil_offset_x),
+            int(eye_center[1] + pupil_offset_y)
+        )
+
+        # 龙眼瞳孔 - 细长的竖瞳
+        pupil_color = (
+            min(255, int(200 + 55 * eye_glow)),
+            min(100, int(20 + 80 * eye_glow)),
+            0
+        )
+        # 竖瞳
+        pupil_height = eye_radius * 1.2
+        pupil_width = eye_radius * 0.4
+
+        # 旋转角度 - 随机晃动
+        pupil_angle = math.sin(anim_time / 1000) * 15
+
+        # 创建竖瞳椭圆
+        pupil_surf = pygame.Surface((int(pupil_width), int(pupil_height)), pygame.SRCALPHA)
+        pygame.draw.ellipse(pupil_surf, pupil_color, (0, 0, int(pupil_width), int(pupil_height)))
+
+        # 旋转瞳孔
+        rotated_pupil = pygame.transform.rotate(pupil_surf, pupil_angle)
+        # 获取旋转后的矩形并居中
+        pupil_rect = rotated_pupil.get_rect(center=pupil_center)
+        # 绘制瞳孔
+        self.screen.blit(rotated_pupil, pupil_rect)
+
+        # 瞳孔高光
+        highlight_pos = (pupil_center[0] - 1, pupil_center[1] - pupil_height / 4)
+        highlight_size = max(1, eye_radius // 4)
+        pygame.draw.circle(self.screen, (255, 255, 255, 200),
+                           highlight_pos, highlight_size)
+
+        # ---- 龙角和头部装饰 ----
+        # 更突出的龙角 - 弯曲的角
+        horn_base_left = (head_center[0] + head_radius * 0.7, head_center[1] - head_radius * 0.6)
+        # 弯曲角 - 多段线
+        horn_mid_left = (horn_base_left[0] + head_radius * 0.4, horn_base_left[1] - head_radius * 0.5)
+        horn_tip_left = (horn_mid_left[0] + head_radius * 0.2, horn_mid_left[1] - head_radius * 0.7)
+
+        # 左角
+        horn_points_left = [horn_base_left, horn_mid_left, horn_tip_left]
+        for i in range(len(horn_points_left) - 1):
+            pygame.draw.line(self.screen, (90, 30, 30),
+                             horn_points_left[i], horn_points_left[i + 1],
+                             max(1, int(3 * scale_factor)))
+
+        # 右角 - 对称
+        horn_base_right = (head_center[0] + head_radius * 1.4, head_center[1] - head_radius * 0.5)
+        horn_mid_right = (horn_base_right[0] + head_radius * 0.4, horn_base_right[1] - head_radius * 0.5)
+        horn_tip_right = (horn_mid_right[0] + head_radius * 0.2, horn_mid_right[1] - head_radius * 0.7)
+
+        # 右角
+        horn_points_right = [horn_base_right, horn_mid_right, horn_tip_right]
+        for i in range(len(horn_points_right) - 1):
+            pygame.draw.line(self.screen, (90, 30, 30),
+                             horn_points_right[i], horn_points_right[i + 1],
+                             max(1, int(3 * scale_factor)))
+
+        # ---- 口鼻部分 ----
+        # 吻部 - 突出的龙吻
+        snout_length = head_radius * 1.5
+        snout_height = head_radius * 0.7
+        snout_x = head_center[0] + head_radius * 0.8
+        snout_y = head_center[1] - snout_height * 0.2
+
+        # 绘制龙吻 - 狭长的吻部
+        pygame.draw.ellipse(self.screen, (125, 45, 45),
+                            (snout_x, snout_y, snout_length, snout_height))
+
+        # 龙嘴线条 - 微张的嘴
+        jaw_start_x = snout_x + snout_length * 0.2
+        jaw_start_y = snout_y + snout_height * 0.7
+        jaw_end_x = snout_x + snout_length * 0.8
+        jaw_end_y = snout_y + snout_height * 0.8
+
+        pygame.draw.line(self.screen, (90, 30, 30),
+                         (jaw_start_x, jaw_start_y),
+                         (jaw_end_x, jaw_end_y),
+                         max(1, int(2 * scale_factor)))
+
+        # 添加牙齿 - 龙的标志性特征
+        teeth_count = 3
+        teeth_height = snout_height * 0.15
+
+        for i in range(teeth_count):
+            tooth_x = jaw_start_x + i * (jaw_end_x - jaw_start_x) / (teeth_count - 1)
+            # 上牙
+            pygame.draw.polygon(self.screen, (240, 240, 240), [
+                (tooth_x, jaw_start_y),
+                (tooth_x - teeth_height / 2, jaw_start_y - teeth_height),
+                (tooth_x + teeth_height / 2, jaw_start_y - teeth_height)
+            ])
+
+            # 下牙 - 错开放置
+            lower_tooth_x = tooth_x + (jaw_end_x - jaw_start_x) / (teeth_count * 2)
+            if lower_tooth_x < jaw_end_x:
+                pygame.draw.polygon(self.screen, (240, 240, 240), [
+                    (lower_tooth_x, jaw_start_y),
+                    (lower_tooth_x - teeth_height / 2, jaw_start_y + teeth_height),
+                    (lower_tooth_x + teeth_height / 2, jaw_start_y + teeth_height)
+                ])
+
+        # 鼻孔 - 椭圆形双鼻孔
+        nostril_w = max(1, head_radius // 6)
+        nostril_h = max(1, head_radius // 10)
+        nostril_y = snout_y + snout_height * 0.3
+
+        # 左鼻孔
+        left_nostril_x = snout_x + snout_length * 0.7
+        pygame.draw.ellipse(self.screen, (60, 20, 20),
+                            (left_nostril_x, nostril_y, nostril_w, nostril_h))
+
+        # 右鼻孔
+        right_nostril_x = left_nostril_x + nostril_w * 1.5
+        pygame.draw.ellipse(self.screen, (60, 20, 20),
+                            (right_nostril_x, nostril_y, nostril_w, nostril_h))
+
+        # ---- 火焰吐息特效 ----
+        if breath_phase > 0:  # 有火焰吐息时
+            mouth_pos = (jaw_end_x, jaw_end_y)
+
+            # 火焰特效参数 - 更长更猛烈的火焰
+            flame_length = TILE_SIZE * (0.6 + 0.3 * breath_phase)  # 随阶段增长
+            flame_width = TILE_SIZE * (0.3 + 0.15 * breath_phase)
+
+            # 创建主火焰多边形 - 更多角的不规则形状
+            flame_points = [
+                mouth_pos,
+                (mouth_pos[0] + flame_length * 0.5, mouth_pos[1] - flame_width * 0.4),
+                (mouth_pos[0] + flame_length * 0.7, mouth_pos[1] - flame_width * 0.2),
+                (mouth_pos[0] + flame_length * 0.9, mouth_pos[1] - flame_width * 0.5),
+                (mouth_pos[0] + flame_length * 1.2, mouth_pos[1]),  # 尖端
+                (mouth_pos[0] + flame_length * 0.9, mouth_pos[1] + flame_width * 0.5),
+                (mouth_pos[0] + flame_length * 0.7, mouth_pos[1] + flame_width * 0.2),
+                (mouth_pos[0] + flame_length * 0.5, mouth_pos[1] + flame_width * 0.4)
+            ]
+
+            # 火焰颜色 - 多层渐变
+            flame_outer = (255, 100 + breath_phase * 30, 0)  # 外焰黄红色
+            flame_mid = (255, 150 + breath_phase * 20, 50)  # 中焰橙色
+            flame_inner = (255, 200 + breath_phase * 10, 100)  # 内焰亮黄色
+
+            # 绘制外层火焰
+            pygame.draw.polygon(self.screen, flame_outer, flame_points)
+
+            # 绘制中层火焰
+            mid_points = []
+            for point in flame_points:
+                # 收缩20%
+                dx = point[0] - mouth_pos[0]
+                dy = point[1] - mouth_pos[1]
+                mid_points.append((mouth_pos[0] + dx * 0.8, mouth_pos[1] + dy * 0.8))
+
+            pygame.draw.polygon(self.screen, flame_mid, mid_points)
+
+            # 绘制内层火焰
+            inner_points = []
+            for point in flame_points:
+                # 收缩50%
+                dx = point[0] - mouth_pos[0]
+                dy = point[1] - mouth_pos[1]
+                inner_points.append((mouth_pos[0] + dx * 0.5, mouth_pos[1] + dy * 0.5))
+
+            pygame.draw.polygon(self.screen, flame_inner, inner_points)
+
+            # 火焰粒子效果 - 更丰富的火星
+            for _ in range(min(12, breath_phase * 4)):
+                # 在火焰范围内随机位置
+                t = random.random()  # 位置参数 0-1
+                angle = random.uniform(-0.5, 0.5)  # 角度偏移
+
+                # 火星距离随机化
+                dist = random.uniform(0.3, 1.0) * flame_length
+
+                # 使用极坐标计算火星位置
+                spark_radius = flame_width * 0.4 * (1 - t)  # 火焰宽度随长度减小
+                px = mouth_pos[0] + dist * math.cos(angle)
+                py = mouth_pos[1] + dist * math.sin(angle)
+
+                # 火星尺寸
+                particle_size = max(1, int(random.randint(1, 3) * scale_factor * (1 - 0.7 * t)))
+
+                # 火星颜色 - 更多样化
+                color_type = random.random()
+                if color_type < 0.6:  # 60% 几率亮黄色
+                    particle_color = (255, 220 + random.randint(0, 35), 100 + random.randint(0, 50))
+                elif color_type < 0.9:  # 30% 几率橙色
+                    particle_color = (255, 180 + random.randint(0, 40), 0 + random.randint(0, 30))
+                else:  # 10% 几率红色
+                    particle_color = (255, 100 + random.randint(0, 50), 0 + random.randint(0, 20))
+
+                pygame.draw.circle(self.screen, particle_color, (int(px), int(py)), particle_size)
+
+                # 火星轨迹 - 拖尾效果
+                if random.random() < 0.3 and particle_size > 1:  # 30% 几率有拖尾
+                    trail_length = random.randint(3, 8)
+                    trail_x = px - trail_length * math.cos(angle)
+                    trail_y = py - trail_length * math.sin(angle)
+
+                    # 半透明拖尾
+                    pygame.draw.line(self.screen,
+                                     (particle_color[0], particle_color[1], particle_color[2], 100),
+                                     (px, py), (trail_x, trail_y), 1)
+
+
 
     # -------------------- 冰霜巨龙绘制 ---------------------
     def draw_dragon_ice(self, monster):
         x = monster.x * TILE_SIZE
         y = monster.y * TILE_SIZE
+
         # 动画参数
         anim_time = pygame.time.get_ticks()
-        wing_angle = math.sin(anim_time / 200) * 0.3  # 翅膀摆动弧度
-        breath_phase = int((anim_time % 400) / 100)  # 四阶段冰霜呼吸循环
-        eye_glow = abs(math.sin(anim_time / 500))  # 眼睛发光强度
+        wing_flap = math.sin(anim_time / 300) * 0.3  # 翅膀摆动弧度
+        breath_phase = int((anim_time % 600) / 150)  # 四阶段呼吸循环
+        eye_glow = abs(math.sin(anim_time / 400))  # 眼睛发光强度
+        body_pulse = 0.03 * math.sin(anim_time / 500)  # 身体微弱起伏效果
 
-        # ---- 基础体型(3x3) ----
-        # 身体主骨架
-        body_color = (70, 130, 180)  # 钢蓝色基底
-        pygame.draw.ellipse(self.screen, body_color,
-                            (x + TILE_SIZE, y + TILE_SIZE, TILE_SIZE, TILE_SIZE))  # 躯干
+        # ---- 阴影效果 ----
+        shadow_surf = pygame.Surface((TILE_SIZE * 3, TILE_SIZE * 0.8), pygame.SRCALPHA)
+        shadow_ellipse = (TILE_SIZE * 0.5, 0, TILE_SIZE * 2, TILE_SIZE * 0.4)
+        pygame.draw.ellipse(shadow_surf, (0, 0, 0, 60), shadow_ellipse)  # 半透明阴影
+        self.screen.blit(shadow_surf, (x, y + TILE_SIZE * 2.5))
 
-        # ---- 动态双翼系统 ----
-        # 左翼（覆盖冰晶）
-        left_wing = [
-            (x + TILE_SIZE, y + TILE_SIZE),  # 翼根
-            (x + int(TILE_SIZE * 0.5), y + int(TILE_SIZE * 0.5) + int(10 * wing_angle)),  # 翼尖
-            (x + TILE_SIZE, y + TILE_SIZE * 2)
-        ]
-        # 右翼
-        right_wing = [
-            (x + TILE_SIZE * 2, y + TILE_SIZE),
-            (x + int(TILE_SIZE * 2.5), y + int(TILE_SIZE * 0.5) + int(10 * wing_angle)),
-            (x + TILE_SIZE * 2, y + TILE_SIZE * 2)
-        ]
+        # ---- 龙身主体 ----
+        # 身体尺寸随呼吸轻微变化
+        body_width = int(TILE_SIZE * 1.2 * (1 + body_pulse))
+        body_height = int(TILE_SIZE * 0.8 * (1 + body_pulse))
+        body_x = x + TILE_SIZE - body_width * 0.3
+        body_y = y + TILE_SIZE * 1.5
 
-        # 翼膜绘制（带冰晶纹理）
-        for wing in [left_wing, right_wing]:
-            pygame.draw.polygon(self.screen, (135, 206, 235), wing)  # 淡蓝色翼膜
-            pygame.draw.polygon(self.screen, (70, 130, 180), wing, 2)  # 深蓝色翼骨
-            # 添加随机冰晶
-            for _ in range(6):
-                ice_x = random.randint(wing[1][0] - 10, wing[1][0] + 10)
-                ice_y = random.randint(wing[1][1] - 10, wing[1][1] + 10)
-                pygame.draw.polygon(self.screen, (240, 255, 255), [
-                    (ice_x, ice_y),
-                    (ice_x + 3, ice_y + 2),
-                    (ice_x + 1, ice_y + 5),
-                    (ice_x - 2, ice_y + 3)
-                ])
+        # 龙身主体 - 冰霜蓝色
+        body_color = (70, 130, 180)  # 冰蓝底色
+        pygame.draw.ellipse(self.screen, body_color, (body_x, body_y, body_width, body_height))
 
-        # ---- 头部细节 ----
-        # 龙头
-        head_radius = TILE_SIZE // 3
-        head_center = (x + TILE_SIZE * 2, y + TILE_SIZE // 2)
-        pygame.draw.circle(self.screen, body_color, head_center, head_radius)
-
-        # 龙眼（发光蓝眼）
-        eye_radius = head_radius // 3
-        eye_center = (head_center[0] - eye_radius, head_center[1] - eye_radius)
-        pygame.draw.circle(self.screen, (240, 255, 255), eye_center, eye_radius)  # 冰白色眼白
-        pygame.draw.circle(self.screen, (0, 191, 255, int(255 * eye_glow)), eye_center,
-                           eye_radius // 2)  # 动态发光的瞳孔
-
-        # 冰晶龙角
-        pygame.draw.polygon(self.screen, (240, 255, 255), [
-            (head_center[0] - head_radius, head_center[1] - head_radius),
-            (head_center[0] - head_radius // 2, head_center[1] - head_radius * 2),
-            (head_center[0], head_center[1] - head_radius)
-        ])
-
-        # ---- 冰霜呼吸特效 ----
-        if breath_phase > 0:
-            breath_length = TILE_SIZE * (0.5 + 0.3 * breath_phase)
-            breath_points = [
-                (head_center[0], head_center[1] + head_radius),
-                (head_center[0] - breath_length // 2, head_center[1] + head_radius + breath_length),
-                (head_center[0] + breath_length // 2, head_center[1] + head_radius + breath_length)
-            ]
-            # 半透明冰雾效果
-            breath_surface = pygame.Surface((TILE_SIZE * 3, TILE_SIZE * 3), pygame.SRCALPHA)
-            pygame.draw.polygon(breath_surface, (135, 206, 235, 150), breath_points)
-            self.screen.blit(breath_surface, (x, y))
-
-            # 冰锥效果
-            for i in range(3):
-                icicle_x = head_center[0] - breath_length // 4 + i * breath_length // 2
-                icicle_y = head_center[1] + head_radius + breath_length - 10
-                pygame.draw.polygon(self.screen, (240, 255, 255), [
-                    (icicle_x, icicle_y),
-                    (icicle_x + 3, icicle_y + 15),
-                    (icicle_x - 3, icicle_y + 15)
-                ])
-
-        # ---- 尾部冰晶链 ----
-        tail_points = [
-            (x + TILE_SIZE, y + TILE_SIZE * 2),
-            (x + TILE_SIZE // 2, y + TILE_SIZE * 3),
-            (x + TILE_SIZE * 1.5, y + TILE_SIZE * 3)
-        ]
-        pygame.draw.polygon(self.screen, body_color, tail_points)
-        # 尾部冰晶装饰
+        # 冰霜纹理 - 在身体表面添加结晶纹路
+        crystal_points = []
         for i in range(4):
-            ice_x = x + TILE_SIZE + (i * 10)
-            ice_y = y + TILE_SIZE * 2 + (i % 2) * 8
-            pygame.draw.polygon(self.screen, (240, 255, 255), [
-                (ice_x, ice_y), (ice_x + 4, ice_y + 3), (ice_x + 2, ice_y + 6), (ice_x - 2, ice_y + 4)
+            angle = math.pi * 2 * i / 4 + anim_time / 2000
+            crystal_points.append((
+                body_x + body_width / 2 + math.cos(angle) * body_width / 3,
+                body_y + body_height / 2 + math.sin(angle) * body_height / 3
+            ))
+
+        # 绘制身体结晶
+        for point in crystal_points:
+            pygame.draw.circle(self.screen, (200, 240, 255), point, 4)
+            # 添加辐射线条
+            for j in range(3):
+                angle = random.uniform(0, math.pi * 2)
+                end_x = point[0] + math.cos(angle) * 6
+                end_y = point[1] + math.sin(angle) * 6
+                pygame.draw.line(self.screen, (220, 240, 255), point, (end_x, end_y), 1)
+
+        # ---- 尾部 ----
+        tail_width = int(TILE_SIZE * 0.3)
+        tail_base_x = body_x + body_width * 0.1
+        tail_base_y = body_y + body_height * 0.5
+
+        # 尾巴摆动效果
+        tail_swing = math.sin(anim_time / 450) * (TILE_SIZE * 0.2)
+
+        tail_points = [
+            (tail_base_x, tail_base_y),  # 尾部根部连接到身体
+            (tail_base_x - TILE_SIZE * 0.6 + tail_swing * 0.3, body_y + body_height + TILE_SIZE * 0.2),
+            (tail_base_x - TILE_SIZE * 1.0 + tail_swing * 0.6, body_y + body_height + TILE_SIZE * 0.4),
+            (tail_base_x - TILE_SIZE * 1.2 + tail_swing, body_y + body_height + TILE_SIZE * 0.2)  # 尾部尖端
+        ]
+
+        # 绘制尾部
+        pygame.draw.polygon(self.screen, (100, 160, 200), tail_points)
+
+        # 尾部冰刺
+        for i in range(len(tail_points) - 1):
+            mid_x = (tail_points[i][0] + tail_points[i + 1][0]) / 2
+            mid_y = (tail_points[i][1] + tail_points[i + 1][1]) / 2
+
+            # 计算垂直于尾部方向的向量
+            dx = tail_points[i + 1][0] - tail_points[i][0]
+            dy = tail_points[i + 1][1] - tail_points[i][1]
+            length = max(0.1, math.sqrt(dx * dx + dy * dy))
+            nx, ny = -dy / length, dx / length
+
+            # 绘制冰刺
+            spike_length = 8 - i * 2  # 尾尖刺更短
+            spike_tip_x = mid_x + nx * spike_length
+            spike_tip_y = mid_y + ny * spike_length
+
+            pygame.draw.polygon(self.screen, (200, 240, 255), [
+                (mid_x - nx * 2, mid_y - ny * 2),
+                (spike_tip_x, spike_tip_y),
+                (mid_x + nx * 2, mid_y + ny * 2)
             ])
 
-        # ---- 环境互动 ----
-        # 地面冰霜特效
-        frost_radius = TILE_SIZE // 4
-        for _ in range(8):
-            fx = x + random.randint(TILE_SIZE // 2, TILE_SIZE * 2)
-            fy = y + random.randint(TILE_SIZE * 2, TILE_SIZE * 3)
-            pygame.draw.circle(self.screen, (175, 238, 238, 80), (fx, fy), frost_radius // 2)
-            pygame.draw.circle(self.screen, (240, 255, 255, 120), (fx, fy), frost_radius // 4)
+        # ---- 翅膀系统 ----
+        # 翅膀基点连接到身体
+        wing_base_left = (body_x + body_width * 0.3, body_y + body_height * 0.2)
+        wing_base_right = (body_x + body_width * 0.7, body_y + body_height * 0.2)
+
+        # 翅膀尺寸
+        wing_length = TILE_SIZE * 1.2
+        wing_width = TILE_SIZE * 0.7
+
+        # 左翼 - 带动态弯曲
+        left_wing_tip_x = wing_base_left[0] - wing_length * math.cos(wing_flap)
+        left_wing_tip_y = wing_base_left[1] - wing_length * math.sin(wing_flap * 0.8)
+        left_wing_mid_x = wing_base_left[0] - wing_length * 0.6 * math.cos(wing_flap + 0.2)
+        left_wing_mid_y = wing_base_left[1] - wing_length * 0.4 * math.sin(wing_flap * 0.8 + 0.2)
+
+        left_wing = [
+            wing_base_left,
+            (left_wing_mid_x, left_wing_mid_y),
+            (left_wing_tip_x, left_wing_tip_y),
+            (left_wing_mid_x - wing_width * 0.3, left_wing_mid_y + wing_width * 0.5),
+            (wing_base_left[0] - wing_width * 0.2, wing_base_left[1] + wing_width * 0.3)
+        ]
+
+        # 右翼 - 带动态弯曲
+        right_wing_tip_x = wing_base_right[0] + wing_length * math.cos(wing_flap)
+        right_wing_tip_y = wing_base_right[1] - wing_length * math.sin(wing_flap * 0.8)
+        right_wing_mid_x = wing_base_right[0] + wing_length * 0.6 * math.cos(wing_flap + 0.2)
+        right_wing_mid_y = wing_base_right[1] - wing_length * 0.4 * math.sin(wing_flap * 0.8 + 0.2)
+
+        right_wing = [
+            wing_base_right,
+            (right_wing_mid_x, right_wing_mid_y),
+            (right_wing_tip_x, right_wing_tip_y),
+            (right_wing_mid_x + wing_width * 0.3, right_wing_mid_y + wing_width * 0.5),
+            (wing_base_right[0] + wing_width * 0.2, wing_base_right[1] + wing_width * 0.3)
+        ]
+
+        # 绘制翅膀
+        for wing_points in [left_wing, right_wing]:
+            # 翅膀主体
+            pygame.draw.polygon(self.screen, (135, 206, 235), wing_points)  # 淡蓝色翼膜
+
+            # 翅膀骨架
+            for i in range(min(3, len(wing_points) - 1)):
+                pygame.draw.line(self.screen, (190, 230, 255),
+                                 wing_points[0], wing_points[i + 1], 2)
+
+            # 翅膀冰晶
+            for i in range(1, len(wing_points)):
+                # 随机位置添加冰晶
+                crystal_x = (wing_points[i][0] + wing_points[0][0]) / 2 + random.randint(-3, 3)
+                crystal_y = (wing_points[i][1] + wing_points[0][1]) / 2 + random.randint(-3, 3)
+
+                # 绘制冰晶
+                crystal_size = random.randint(2, 4)
+                pygame.draw.polygon(self.screen, (240, 255, 255), [
+                    (crystal_x, crystal_y - crystal_size),
+                    (crystal_x + crystal_size, crystal_y),
+                    (crystal_x, crystal_y + crystal_size),
+                    (crystal_x - crystal_size, crystal_y)
+                ])
+
+        # ---- 头部系统 ----
+        # 脖子
+        neck_start = (body_x + body_width * 0.7, body_y + body_height * 0.3)
+        neck_end = (body_x + body_width + TILE_SIZE * 0.5, body_y - TILE_SIZE * 0.2)
+
+        # 控制点创建弯曲的脖子
+        neck_ctrl1 = (neck_start[0] + (neck_end[0] - neck_start[0]) * 0.3,
+                      neck_start[1] - TILE_SIZE * 0.3)
+        neck_ctrl2 = (neck_start[0] + (neck_end[0] - neck_start[0]) * 0.7,
+                      neck_end[1] + TILE_SIZE * 0.2)
+
+        # 生成脖子曲线点
+        neck_points = []
+        segments = 8
+        for i in range(segments + 1):
+            t = i / segments
+            # 三次贝塞尔曲线
+            px = (1 - t) ** 3 * neck_start[0] + 3 * (1 - t) ** 2 * t * neck_ctrl1[0] + 3 * (1 - t) * t ** 2 * \
+                 neck_ctrl2[0] + t ** 3 * neck_end[0]
+            py = (1 - t) ** 3 * neck_start[1] + 3 * (1 - t) ** 2 * t * neck_ctrl1[1] + 3 * (1 - t) * t ** 2 * \
+                 neck_ctrl2[1] + t ** 3 * neck_end[1]
+            neck_points.append((px, py))
+
+        # 绘制脖子
+        for i in range(len(neck_points) - 1):
+            # 脖子逐渐变窄
+            neck_width = 10 - i * 0.8
+            pygame.draw.line(self.screen, (100, 160, 200),
+                             neck_points[i], neck_points[i + 1], int(neck_width))
+
+            # 添加脖子冰刺
+            if i % 2 == 0:
+                spine_x = neck_points[i][0]
+                spine_y = neck_points[i][1] - neck_width / 2
+                spine_height = 6 - i * 0.5
+
+                pygame.draw.polygon(self.screen, (190, 230, 255), [
+                    (spine_x - 2, spine_y),
+                    (spine_x, spine_y - spine_height),
+                    (spine_x + 2, spine_y)
+                ])
+
+        # 头部
+        head_radius = TILE_SIZE // 3
+        head_center = neck_end
+        head_rect = (head_center[0] - head_radius * 0.5,
+                     head_center[1] - head_radius,
+                     head_radius * 2.5,
+                     head_radius * 2)
+
+        # 绘制头部
+        pygame.draw.ellipse(self.screen, (100, 160, 200), head_rect)
+
+        # 下颚
+        jaw_points = [
+            (head_center[0], head_center[1] + head_radius * 0.5),
+            (head_center[0] + head_radius * 1.2, head_center[1] + head_radius * 0.8),
+            (head_center[0] + head_radius * 2, head_center[1] + head_radius * 0.5)
+        ]
+        pygame.draw.polygon(self.screen, (70, 130, 180), jaw_points)
+
+        # 眼睛 - 发光蓝眼
+        eye_radius = head_radius // 3
+        eye_center = (head_center[0] + head_radius * 0.5, head_center[1] - head_radius * 0.3)
+
+        # 眼眶
+        eye_socket = pygame.Surface((eye_radius * 2.5, eye_radius * 2.5), pygame.SRCALPHA)
+        pygame.draw.ellipse(eye_socket, (50, 90, 140, 200), (0, 0, eye_radius * 2.5, eye_radius * 2.5))
+        self.screen.blit(eye_socket, (eye_center[0] - eye_radius * 1.25, eye_center[1] - eye_radius * 1.25))
+
+        # 眼白
+        pygame.draw.circle(self.screen, (200, 240, 255), eye_center, eye_radius)
+
+        # 动态瞳孔 - 随着动画时间变化
+        pupil_offset_x = math.sin(anim_time / 1500) * (eye_radius * 0.3)
+        pupil_offset_y = math.cos(anim_time / 1300) * (eye_radius * 0.2)
+        pupil_center = (int(eye_center[0] + pupil_offset_x), int(eye_center[1] + pupil_offset_y))
+
+        # 动态发光强度
+        glow_intensity = 150 + int(105 * eye_glow)
+
+        # 冰蓝色瞳孔
+        pupil_color = (0, glow_intensity, 255)
+
+        # 椭圆形竖瞳 - 冰霜龙的特征
+        pupil_height = eye_radius * 1.4
+        pupil_width = eye_radius * 0.4
+        pupil_rect = (pupil_center[0] - pupil_width / 2, pupil_center[1] - pupil_height / 2,
+                      pupil_width, pupil_height)
+        pygame.draw.ellipse(self.screen, pupil_color, pupil_rect)
+
+        # 眼睛高光
+        highlight_pos = (eye_center[0] - eye_radius * 0.3, eye_center[1] - eye_radius * 0.3)
+        highlight_size = max(1, eye_radius // 3)
+        pygame.draw.circle(self.screen, (255, 255, 255), highlight_pos, highlight_size)
+
+        # 冰晶角
+        horn_base = (head_center[0] + head_radius * 0.3, head_center[1] - head_radius * 0.8)
+        horn_mid = (horn_base[0] + head_radius * 0.2, horn_base[1] - head_radius * 0.8)
+        horn_tip = (horn_mid[0] + head_radius * 0.1, horn_mid[1] - head_radius * 0.6)
+
+        # 绘制角 - 透明效果
+        horn_points = [horn_base, horn_mid, horn_tip]
+        for i in range(len(horn_points) - 1):
+            # 渐变的蓝色到透明
+            alpha = 255 - i * 80
+            horn_surf = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+            pygame.draw.line(horn_surf, (150, 220, 255, alpha),
+                             (horn_points[i][0] - x, horn_points[i][1] - y),
+                             (horn_points[i + 1][0] - x, horn_points[i + 1][1] - y), 4 - i)
+            self.screen.blit(horn_surf, (x, y))
+
+        # 添加角的结晶分支
+        branch_count = 3
+        for i in range(branch_count):
+            t = (i + 1) / (branch_count + 1)
+            branch_start_x = horn_base[0] * (1 - t) + horn_tip[0] * t
+            branch_start_y = horn_base[1] * (1 - t) + horn_tip[1] * t
+
+            branch_length = (branch_count - i) * 5
+            branch_angle = math.pi / 4 + (i * math.pi / 6)
+
+            branch_end_x = branch_start_x + math.cos(branch_angle) * branch_length
+            branch_end_y = branch_start_y + math.sin(branch_angle) * branch_length
+
+            pygame.draw.line(self.screen, (200, 240, 255, 150),
+                             (branch_start_x, branch_start_y),
+                             (branch_end_x, branch_end_y), 2)
+
+        # ---- 冰霜吐息特效 ----
+        if breath_phase > 0:
+            breath_length = TILE_SIZE * (0.5 + 0.3 * breath_phase)
+            mouth_pos = (head_center[0] + head_radius * 2, head_center[1] + head_radius * 0.3)
+
+            # 冰雾主体 - 半透明锥形
+            breath_points = [
+                mouth_pos,
+                (mouth_pos[0] + breath_length, mouth_pos[1] - breath_length / 3),
+                (mouth_pos[0] + breath_length * 1.2, mouth_pos[1]),
+                (mouth_pos[0] + breath_length, mouth_pos[1] + breath_length / 3)
+            ]
+
+            # 绘制冰雾
+            breath_surf = pygame.Surface((TILE_SIZE * 4, TILE_SIZE * 2), pygame.SRCALPHA)
+            pygame.draw.polygon(breath_surf, (200, 240, 255, 150 - breath_phase * 20),
+                                [(p[0] - mouth_pos[0] + TILE_SIZE * 1.5, p[1] - mouth_pos[1] + TILE_SIZE) for p in
+                                 breath_points])
+            self.screen.blit(breath_surf, (mouth_pos[0] - TILE_SIZE * 1.5, mouth_pos[1] - TILE_SIZE))
+
+            # 添加冰晶粒子
+            for _ in range(4 + breath_phase * 2):
+                # 随机位置
+                t = random.random()
+                angle = random.uniform(-0.3, 0.3)
+                dist = breath_length * t * 0.8
+                px = mouth_pos[0] + dist * math.cos(angle)
+                py = mouth_pos[1] + dist * math.sin(angle)
+
+                # 冰晶大小随距离变化
+                crystal_size = 3 - t * 2
+
+                # 随机冰晶形态
+                if random.random() < 0.5:
+                    # 菱形冰晶
+                    pygame.draw.polygon(self.screen, (220, 240, 255), [
+                        (px, py - crystal_size),
+                        (px + crystal_size, py),
+                        (px, py + crystal_size),
+                        (px - crystal_size, py)
+                    ])
+                else:
+                    # 圆形冰晶
+                    pygame.draw.circle(self.screen, (220, 240, 255), (int(px), int(py)), int(crystal_size))
+                    # 添加高光
+                    pygame.draw.circle(self.screen, (255, 255, 255),
+                                       (int(px - crystal_size * 0.3), int(py - crystal_size * 0.3)),
+                                       max(1, int(crystal_size * 0.5)))
+
+        # ---- 环境冰霜效果 ----
+        # 地面冰霜
+        frost_effect = pygame.Surface((TILE_SIZE * 3, TILE_SIZE), pygame.SRCALPHA)
+        for _ in range(15):
+            fx = random.randint(0, TILE_SIZE * 3 - 1)
+            fy = random.randint(TILE_SIZE // 2, TILE_SIZE - 1)
+            size = random.randint(2, 5)
+            alpha = random.randint(40, 80)
+            pygame.draw.circle(frost_effect, (200, 240, 255, alpha), (fx, fy), size)
+        self.screen.blit(frost_effect, (x, y + TILE_SIZE * 2))
 
     # ----------------- 神圣骑士绘制 -------------------
 
-    def draw_holy_knight(self, monster):
+    def draw_holy_knight(self, monster, holy_ball_count=5):
         x = monster.x * TILE_SIZE
         y = monster.y * TILE_SIZE
         w = monster.size[0] * TILE_SIZE
@@ -6136,9 +7775,9 @@ class Game:
 
         # 创建5个围绕的圣光球 (适当缩小)
         holy_balls = []
-        for i in range(5):
+        for i in range(holy_ball_count):
             # 计算基础轨道位置 (轨道半径按比例缩小)
-            angle = anim_time / 800 + i * math.pi * 2 / 5
+            angle = anim_time / 800 + i * math.pi * 2 / holy_ball_count
             radius = (core_size * 3.5 + 15 * math.sin(anim_time / 600 + i * 0.7)) * scale_factor * 1.1  # 适当放大一点轨道以保持平衡
 
             # 添加不规则运动 (抖动幅度减小)
@@ -6717,8 +8356,6 @@ class Game:
                     self.draw_lava_tile(x, y)
                 elif self.maze[y][x] == 4:  # 黑曜石雕像
                     self.draw_obsidian_statue(x, y)
-                elif self.maze[y][x] == 5:  # 地狱地板
-                    self.draw_hell_floor(x, y)
 
     def create_fountain_room(self, room):
         x, y, w, h = room
@@ -6822,75 +8459,335 @@ class Game:
                     self.maze[j][i] = 5
 
     def draw_lava_tile(self, x, y):
-        anim_time = pygame.time.get_ticks()
+        """绘制岩浆地板 - 简化版本：气泡从内部生成，无竖纹和颜色变化"""
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+        anim_time = pygame.time.get_ticks()
 
-        # 岩浆基底颜色动态变化
-        lava_color = (
-            200 + int(55 * math.sin(anim_time / 300)),
-            80 + int(40 * math.cos(anim_time / 400)),
-            0,
-            200
-        )
+        # 为每个特定位置生成固定的随机种子
+        position_seed = hash((x, y, self.floor))
+        random.seed(position_seed)
+
+        # 确定此位置的气泡特性
+        bubble_count = random.randint(3, 5)  # 每个瓦片3-5个气泡
+        bubbles = []
+
+        for i in range(bubble_count):
+            # 气泡位置 - 现在在岩浆块内部
+            bubble_x = random.randint(TILE_SIZE // 4, 3 * TILE_SIZE // 4)
+            bubble_y = random.randint(TILE_SIZE // 4, 3 * TILE_SIZE // 4)
+            base_size = random.randint(3, 6)  # 基础大小
+
+            # 每个气泡的生命周期随机，确保不同时出现和消失
+            cycle_offset = random.randint(0, 2000)
+            cycle_duration = random.randint(1500, 2500)  # 气泡周期1.5-2.5秒
+
+            bubbles.append({
+                'x': bubble_x,
+                'y': bubble_y,
+                'base_size': base_size,
+                'cycle_offset': cycle_offset,
+                'cycle_duration': cycle_duration,
+            })
+
+        # 重置随机种子
+        random.seed()
+
+        # 岩浆固定颜色 - 无动态变化
+        lava_color = (220, 80, 0)  # 统一亮度的岩浆颜色
         pygame.draw.rect(self.screen, lava_color, rect)
 
-        # 岩浆流动纹理
-        for i in range(8):
-            flow_x = x * TILE_SIZE + random.randint(2, TILE_SIZE - 2)
-            flow_y = y * TILE_SIZE + (anim_time // 30 + i * 40) % (TILE_SIZE + 40)
-            pygame.draw.line(self.screen, (255, 140, 0),
-                             (flow_x, flow_y - 5), (flow_x, flow_y + 5), 3)
+        # 绘制底层岩浆纹理 - 静态纹理
+        for i in range(4):
+            texture_start_x = rect.left + random.randint(5, TILE_SIZE - 10)
+            texture_start_y = rect.top + random.randint(5, TILE_SIZE - 10)
+            texture_width = random.randint(5, 15)
+            texture_height = random.randint(3, 8)
 
-        # 随机气泡
-        if random.random() < 0.1:
-            bubble_x = x * TILE_SIZE + random.randint(5, TILE_SIZE - 5)
-            bubble_y = y * TILE_SIZE + random.randint(5, TILE_SIZE - 5)
-            pygame.draw.circle(self.screen, (255, 80, 0),
-                               (bubble_x, bubble_y), random.randint(2, 4))
+            # 较暗的纹理色
+            texture_color = (180, 60, 0)  # 统一的较暗纹理色
+
+            # 绘制不规则纹理块
+            pygame.draw.ellipse(self.screen, texture_color,
+                                (texture_start_x, texture_start_y, texture_width, texture_height))
+
+        # 绘制岩浆气泡
+        for bubble in bubbles:
+            # 计算当前气泡周期状态 (0.0 - 1.0)
+            bubble_time = (anim_time + bubble['cycle_offset']) % bubble['cycle_duration']
+            cycle_position = bubble_time / bubble['cycle_duration']
+
+            # 气泡位置 - 固定在岩浆内部
+            current_x = rect.left + bubble['x']
+            current_y = rect.top + bubble['y']
+
+            # 气泡生命周期：形成 -> 膨胀 -> 破裂
+            if cycle_position < 0.7:  # 形成和膨胀阶段
+                # 气泡从小变大
+                size_factor = min(1.0, cycle_position / 0.3)  # 前30%时间逐渐形成
+                if cycle_position > 0.3:
+                    size_factor = 1.0 + (cycle_position - 0.3) * 0.5 / 0.4  # 中间40%时间膨胀
+
+                current_size = bubble['base_size'] * size_factor
+
+                # 气泡颜色 - 较亮
+                bubble_color = (255, 150, 50)  # 统一的气泡颜色
+
+                # 绘制气泡主体
+                pygame.draw.circle(self.screen, bubble_color,
+                                   (int(current_x), int(current_y)),
+                                   int(current_size))
+
+                # 气泡高光
+                highlight_size = max(1, int(current_size * 0.4))
+                highlight_x = current_x - current_size * 0.3
+                highlight_y = current_y - current_size * 0.3
+                pygame.draw.circle(self.screen, (255, 220, 150),
+                                   (int(highlight_x), int(highlight_y)),
+                                   highlight_size)
+
+            elif cycle_position < 0.85:  # 破裂阶段 (15%的时间)
+                # 破裂进度 (0.0 - 1.0)
+                burst_progress = (cycle_position - 0.7) / 0.15
+
+                # 绘制破裂效果 - 渐渐分散的多个小圆
+                fragments = 5
+                max_spread = bubble['base_size'] * 1.5  # 最大扩散距离
+
+                for i in range(fragments):
+                    angle = math.pi * 2 * i / fragments + burst_progress * 0.5  # 随时间略微旋转
+                    spread_factor = burst_progress * max_spread
+
+                    # 片段位置
+                    frag_x = current_x + math.cos(angle) * spread_factor
+                    frag_y = current_y + math.sin(angle) * spread_factor
+
+                    # 片段大小随破裂进度减小
+                    frag_size = bubble['base_size'] * (1.0 - burst_progress) * 0.5
+
+                    # 片段颜色
+                    frag_color = (255, 150, 50)  # 统一的片段颜色
+
+                    # 绘制破裂片段
+                    if frag_size > 0.5:  # 只绘制足够大的片段
+                        pygame.draw.circle(self.screen, frag_color,
+                                           (int(frag_x), int(frag_y)),
+                                           int(frag_size))
+
+                # 气泡破裂时的中心涟漪
+                ripple_size = bubble['base_size'] * (0.5 + burst_progress)
+                ripple_width = max(1, int(2 * (1.0 - burst_progress)))
+                pygame.draw.circle(self.screen, (255, 160, 60),
+                                   (int(current_x), int(current_y)),
+                                   int(ripple_size),
+                                   ripple_width)
 
     def draw_obsidian_statue(self, x, y):
+        """绘制更加生动形象的黑曜石雕像"""
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-        # 雕像主体
-        pygame.draw.polygon(self.screen, (20, 20, 20), [
-            (rect.centerx, rect.top + 5),
-            (rect.left + 8, rect.bottom - 5),
-            (rect.right - 8, rect.bottom - 5)
-        ])
-        # 熔岩纹路
-        lava_lines = [
-            (rect.centerx - 5, rect.top + 15),
-            (rect.centerx + 5, rect.top + 20),
-            (rect.centerx, rect.top + 25)
+        current_time = pygame.time.get_ticks()
+
+        # 基础参数
+        base_color = (15, 15, 15)  # 深黑色
+        lava_color = (255, 80, 0, 180)  # 岩浆颜色
+        pulse_factor = 0.5 + 0.5 * math.sin(current_time / 300)  # 脉动系数
+
+        # 雕像主体 - 简化的多边形
+        statue_points = [
+            (rect.centerx, rect.top + 5),  # 顶部
+            (rect.left + 8, rect.centery),  # 左侧
+            (rect.left + 10, rect.bottom - 5),  # 左下
+            (rect.centerx, rect.bottom - 3),  # 底部
+            (rect.right - 10, rect.bottom - 5),  # 右下
+            (rect.right - 8, rect.centery)  # 右侧
         ]
-        pygame.draw.lines(self.screen, (255, 80, 0), False, lava_lines, 3)
+        pygame.draw.polygon(self.screen, base_color, statue_points)
+
+        # 岩浆纹路 - 简化的路径
+        lava_path = [
+            (rect.centerx, rect.top + 15),
+            (rect.centerx - 5, rect.centery),
+            (rect.centerx, rect.bottom - 8)
+        ]
+
+        # 绘制岩浆纹路
+        lava_surf = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+        pygame.draw.lines(lava_surf, lava_color, False, lava_path,
+                          max(2, int(3 * pulse_factor)))  # 动态宽度
+        self.screen.blit(lava_surf, rect.topleft)
 
         # 恶魔之眼
-        pygame.draw.circle(self.screen, (255, 0, 0),
-                           (rect.centerx, rect.centery - 5), 6)
-        pygame.draw.circle(self.screen, (0, 0, 0),
-                           (rect.centerx, rect.centery - 5), 3)
+        eye_center = (rect.centerx, rect.centery - 5)
+        eye_radius = 6
+
+        # 眼睛底色 - 血红色
+        pygame.draw.circle(self.screen, (180, 0, 0), eye_center, eye_radius)
+
+        # 眼球 - 随时间小幅移动
+        pupil_offset = int(math.sin(current_time / 800) * 2)
+        pupil_center = (eye_center[0] + pupil_offset, eye_center[1])
+        pygame.draw.circle(self.screen, (0, 0, 0), pupil_center, eye_radius // 2)
+
+        # 眼球高光
+        pygame.draw.circle(self.screen, (255, 255, 255),
+                           (pupil_center[0] - 1, pupil_center[1] - 1), 1)
+
+        # 顶部恶魔角 - 简化版
+        pygame.draw.line(self.screen, base_color,
+                         (rect.centerx - 5, rect.top + 8),
+                         (rect.centerx - 9, rect.top + 3), 2)
+        pygame.draw.line(self.screen, base_color,
+                         (rect.centerx + 5, rect.top + 8),
+                         (rect.centerx + 9, rect.top + 3), 2)
+
+        # 随机岩浆滴落 - 偶尔出现
+        if random.random() < 0.08:
+            drop_start = (rect.centerx, rect.bottom - 6)
+            drop_end = (rect.centerx, rect.bottom - 1)
+            drop_surf = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+            pygame.draw.line(drop_surf, (255, 100, 0, 200), drop_start, drop_end, 2)
+            self.screen.blit(drop_surf, rect.topleft)
 
     def draw_hell_floor(self, x, y):
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-        # 焦黑基底
-        pygame.draw.rect(self.screen, (60, 30, 30), rect)
 
-        # 裂纹
-        for _ in range(3):
-            start = (rect.left + random.randint(2, TILE_SIZE - 2),
-                     rect.top + random.randint(2, TILE_SIZE - 2))
-            end = (start[0] + random.randint(-8, 8), start[1] + random.randint(-8, 8))
-            pygame.draw.line(self.screen, (80, 40, 40), start, end, 2)
+        # 为每个地板格子提供唯一且固定的随机种子
+        position_seed = hash((x, y, self.floor))
+        random.seed(position_seed)
 
-        # 随机火焰
-        if random.random() < 0.2:
-            flame_h = random.randint(8, 15)
-            flame_points = [
-                (rect.centerx, rect.bottom - flame_h),
-                (rect.centerx - 5, rect.bottom - flame_h // 2),
-                (rect.centerx + 5, rect.bottom - flame_h // 2)
-            ]
-            pygame.draw.polygon(self.screen, (255, 140, 0), flame_points)
+        # 决定此地砖的主要类型
+        tile_type = random.choices(['magma_dominant', 'obsidian_dominant', 'mixed'], weights=[0.4, 0.4, 0.2], k=1)[0]
+
+        # 黑曜石结晶参数
+        has_obsidian = True if tile_type in ['obsidian_dominant', 'mixed'] else random.random() < 0.3
+        num_obsidian = random.randint(2, 4) if tile_type == 'obsidian_dominant' else random.randint(1, 2)
+
+        # 裂纹参数
+        num_cracks = random.randint(2, 5)
+        crack_features = []
+        for _ in range(num_cracks):
+            start_x = rect.left + random.randint(2, TILE_SIZE - 2)
+            start_y = rect.top + random.randint(2, TILE_SIZE - 2)
+            crack_features.append({
+                'start': (start_x, start_y),
+                'dx': random.randint(-8, 8),
+                'dy': random.randint(-8, 8),
+                'width': random.randint(1, 2)
+            })
+
+        # 黑曜石结晶点
+        obsidian_crystals = []
+        if has_obsidian:
+            for _ in range(num_obsidian):
+                crystal_x = rect.left + random.randint(5, TILE_SIZE - 5)
+                crystal_y = rect.top + random.randint(5, TILE_SIZE - 5)
+
+                shape_type = random.choice(['polygon', 'shard'])  # 形状类型
+
+                if shape_type == 'polygon':
+                    # 多边形黑曜石
+                    num_sides = random.randint(4, 7)
+                    radius = random.randint(4, 8)
+                    angle_offset = random.uniform(0, math.pi * 2)
+
+                    points = []
+                    for i in range(num_sides):
+                        angle = angle_offset + i * (2 * math.pi / num_sides)
+                        r = radius * random.uniform(0.8, 1.2)  # 不规则边缘
+                        px = crystal_x + int(math.cos(angle) * r)
+                        py = crystal_y + int(math.sin(angle) * r)
+                        points.append((px, py))
+
+                    obsidian_crystals.append({
+                        'type': 'polygon',
+                        'points': points,
+                        'color': (20, 20, 25),
+                        'highlight': random.random() < 0.7  # 70%几率有高光
+                    })
+                else:
+                    # 锐利碎片形状
+                    length = random.randint(5, 10)
+                    angle = random.uniform(0, math.pi * 2)
+
+                    # 主轴
+                    main_dx = int(math.cos(angle) * length)
+                    main_dy = int(math.sin(angle) * length)
+
+                    # 副轴（垂直于主轴）
+                    perp_angle = angle + math.pi / 2
+                    perp_length = length * random.uniform(0.4, 0.8)
+                    perp_dx = int(math.cos(perp_angle) * perp_length)
+                    perp_dy = int(math.sin(perp_angle) * perp_length)
+
+                    # 碎片顶点
+                    points = [
+                        (crystal_x, crystal_y),
+                        (crystal_x + main_dx, crystal_y + main_dy),
+                        (crystal_x + main_dx + perp_dx, crystal_y + main_dy + perp_dy),
+                        (crystal_x + perp_dx, crystal_y + perp_dy)
+                    ]
+
+                    obsidian_crystals.append({
+                        'type': 'shard',
+                        'points': points,
+                        'color': (15, 15, 20),
+                        'highlight': random.random() < 0.5  # 50%几率有高光
+                    })
+
+        # 重置随机种子
+        random.seed()
+
+        # 绘制基础地面
+        if tile_type == 'magma_dominant':
+            base_color = (70, 35, 30)  # 略带红色
+        elif tile_type == 'obsidian_dominant':
+            base_color = (40, 40, 45)  # 更深灰色带蓝
+        else:
+            base_color = (60, 35, 35)  # 中性色
+        pygame.draw.rect(self.screen, base_color, rect)
+
+        # 绘制裂纹
+        for crack in crack_features:
+            # 根据地板类型调整裂纹颜色
+            if tile_type == 'magma_dominant':
+                crack_color = (100, 50, 40)  # 红棕色
+            elif tile_type == 'obsidian_dominant':
+                crack_color = (40, 40, 50)  # 深蓝灰
+            else:
+                crack_color = (80, 45, 45)  # 中间色
+            pygame.draw.line(self.screen, crack_color,
+                             crack['start'],
+                             (crack['start'][0] + crack['dx'], crack['start'][1] + crack['dy']),
+                             crack['width'])
+
+        # 绘制黑曜石结晶
+        for crystal in obsidian_crystals:
+            # 绘制主体
+            pygame.draw.polygon(self.screen, crystal['color'], crystal['points'])
+
+            # 添加简化的反光/高光效果
+            if crystal['highlight']:
+                # 找到多边形的质心
+                cx = sum(p[0] for p in crystal['points']) / len(crystal['points'])
+                cy = sum(p[1] for p in crystal['points']) / len(crystal['points'])
+
+                # 从质心到随机顶点作为高光
+                highlight_idx = random.randint(0, len(crystal['points']) - 1)
+                highlight_point = crystal['points'][highlight_idx]
+
+                # 绘制高光线
+                highlight_color = (60, 60, 70)  # 浅灰色高光
+                pygame.draw.line(self.screen, highlight_color,
+                                 (cx, cy),
+                                 (0.7 * cx + 0.3 * highlight_point[0],
+                                  0.7 * cy + 0.3 * highlight_point[1]),
+                                 1)
+
+                # 额外的尖锐反光点
+                if random.random() < 0.5:
+                    random_point = random.choice(crystal['points'])
+                    pygame.draw.circle(self.screen, (100, 100, 120),
+                                       (int(random_point[0]), int(random_point[1])),
+                                       1)
 
         # ----------------------迷宫墙壁绘画 ----------------------
 
@@ -6931,18 +8828,53 @@ class Game:
             }
 
     def generate_floor_style(self, x, y):
-        """生成地板的固定样式参数"""
+        """生成地板的固定样式参数，与周围墙壁风格相协调"""
         seed = hash((x, y, self.floor))
         random.seed(seed)
 
-        return {
-            'crack_h': random.random() < 0.45,  # 30%概率有水平裂缝
-            'crack_v': random.random() < 0.45,  # 30%概率有垂直裂缝
+        # 检查相邻的墙壁类型，使地板风格与之协调
+        wall_count = 0
+        wall_types = []
+
+        # 检查周围8个方向的墙壁
+        for dx, dy in [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < MAP_WIDTH and 0 <= ny < MAP_HEIGHT and self.maze[ny][nx] == 1:
+                wall_count += 1
+                if hasattr(self, 'tile_styles') and self.tile_styles[ny][nx]:
+                    wall_types.append(self.tile_styles[ny][nx]['type'])
+
+        # 生成基于周围环境的地板样式
+        style = {
+            'crack_h': random.random() < 0.45,  # 40%概率有水平裂缝
+            'crack_v': random.random() < 0.45,  # 40%概率有垂直裂缝
             'stain_pos': (
                 random.randint(2, TILE_SIZE - 6),
                 random.randint(2, TILE_SIZE - 6)
-            ) if random.random() < 0.1 else None  # 10%概率有污渍
+            ) if random.random() < 0.1 else None,  # 10%概率有污渍
+            'wear_pattern': random.choice(['none', 'corner', 'center', 'edge']),  # 磨损模式
+            'dust_level': random.random() * 0.5,  # 灰尘等级 (0-0.5)
+            'moisture': random.random() < 0.15  # 15%概率显示潮湿
         }
+
+        # 根据周围墙壁类型调整地板外观
+        if 'moss' in wall_types:
+            style['moss_patches'] = True if random.random() < 0.6 else False  # 60%概率有青苔小块
+            style['moss_color'] = (34, 139, 34)  # 青苔颜色
+
+        if 'cracked' in wall_types:
+            style['crack_h'] = True if random.random() < 0.7 else style['crack_h']  # 增加裂缝概率
+            style['crack_v'] = True if random.random() < 0.7 else style['crack_v']
+            style['extra_cracks'] = random.randint(0, 3)  # 额外的小裂缝数量
+
+        # 根据墙壁密度调整地板风格
+        if wall_count >= 5:  # 周围墙壁较多，意味着这是一个狭窄区域
+            style['dust_level'] += 0.3  # 灰尘更多
+            style['wear_pattern'] = 'center'  # 中央磨损（因为中央走的人多）
+
+        # 重置随机种子
+        random.seed()
+        return style
 
     def is_position_empty_for_monster(self, x, y, size, occupied):
         """检查目标位置是否为空（没有怪物、道具、墙壁），并且可以容纳怪物的大小"""
@@ -7368,8 +9300,8 @@ class Game:
                     monster.heal_pulse_cd = 0
                     monster.holy_ball_range = 8
                     monster.holy_damage = monster.atk * 2
-                    monster.heal_range = 6
-                    monster.heal_amount = 100  # 每次恢复量
+                    monster.heal_range = 8
+                    monster.heal_amount = 100 * self.floor  # 每次恢复量
 
                 # 更新技能冷却
                 monster.holy_ball_cd = max(0, monster.holy_ball_cd - dt)
@@ -7384,7 +9316,7 @@ class Game:
                     # 创建效果实例 - 显式标记为怪物技能并传入玩家为目标
                     effect = HolyBallEffect(
                         player_pos=(monster.x + 1, monster.y + 1),  # 从怪物中心位置发射
-                        ball_count=5,
+                        ball_count=monster.num_balls,
                         seek_range=monster.holy_ball_range,
                         damage_multiplier=1.5,
                         is_monster_skill=True,  # 标记为怪物技能
@@ -7406,7 +9338,7 @@ class Game:
                     # 创建围绕怪物自身的神圣光球，显式标记为怪物技能
                     holy_guardian = SummonHolyBall(
                         owner=monster,  # 怪物作为拥有者
-                        ball_count=6,
+                        ball_count=monster.num_balls,
                         duration=12.0,
                         attack_range=6,
                         attack_speed=1.0,
@@ -7426,8 +9358,7 @@ class Game:
                 # 治疗周围的友军
                 if monster.heal_pulse_cd <= 0:
                     healed = False
-
-                    # 检查周围6格内的友军
+                    # 检查周围的友军
                     for other_monster in self.monsters:
                         if other_monster is not monster:  # 不包括自己
                             distance = abs(monster.x - other_monster.x) + abs(monster.y - other_monster.y)
@@ -7688,152 +9619,1405 @@ class Game:
                         (x + tile_size // 2, y - tile_size // 2, tile_size, tile_size),
                         math.radians(270), math.radians(360), 2)
 
-    # 墙壁绘制方法：
+    # ----------------- 墙壁绘制方法 ---------------------------
     def draw_wall(self, x, y, surface=None):
+        """使用预先生成的样式绘制立体墙壁，添加凸起、凹陷和不规则边缘效果"""
         surface = surface or self.screen
-        """使用预先生成的样式绘制墙壁"""
         style = self.tile_styles[y][x]
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 
-        # 绘制基础颜色
-        pygame.draw.rect(surface, COLOR_STONE, rect)
+        # 为每个墙体生成一个稳定的随机种子，确保同一位置的墙体外观一致
+        wall_seed = hash((x, y, self.floor))
+        random.seed(wall_seed)
 
+        # 墙体基础颜色 - 随机化程度略增
+        base_color = (
+            max(25, min(55, COLOR_STONE[0] + random.randint(-8, 8))),
+            max(25, min(55, COLOR_STONE[1] + random.randint(-8, 8))),
+            max(25, min(55, COLOR_STONE[2] + random.randint(-8, 8)))
+        )
+
+        # 填充基础深色背景 - 带有微妙的噪点
+        darker_base = (max(15, base_color[0] - 15), max(15, base_color[1] - 15), max(15, base_color[2] - 15))
+        pygame.draw.rect(surface, darker_base, rect)
+
+        # 添加纹理噪点
+        for _ in range(12):
+            noise_x = rect.left + random.randint(0, TILE_SIZE - 1)
+            noise_y = rect.top + random.randint(0, TILE_SIZE - 1)
+            noise_color = (darker_base[0] + random.randint(-5, 5),
+                           darker_base[1] + random.randint(-5, 5),
+                           darker_base[2] + random.randint(-5, 5))
+            pygame.draw.rect(surface, noise_color, (noise_x, noise_y, 1, 1))
+
+        # 添加随机石块 - 更不规则的形状
+        num_stones = random.randint(4, 7)  # 增加石块数量
+        used_area = []  # 记录已使用的区域
+
+        for _ in range(num_stones):
+            # 随机石块尺寸 (更多变化)
+            stone_width = random.randint(TILE_SIZE // 4, TILE_SIZE // 2 + 2)
+            stone_height = random.randint(TILE_SIZE // 4, TILE_SIZE // 2 + 2)
+
+            # 随机位置 (尝试12次找到不重叠的位置)
+            for attempt in range(12):
+                stone_x = rect.left + random.randint(-2, TILE_SIZE - stone_width + 2)  # 允许稍微超出边界
+                stone_y = rect.top + random.randint(-2, TILE_SIZE - stone_height + 2)
+                stone_rect = pygame.Rect(stone_x, stone_y, stone_width, stone_height)
+
+                # 检查是否与已有石块重叠太多
+                overlap = False
+                for used in used_area:
+                    if stone_rect.colliderect(used) and (
+                            stone_rect.width * stone_rect.height > 0.6 * used.width * used.height):
+                        overlap = True
+                        break
+
+                if not overlap or attempt == 11:  # 第12次尝试强制放置
+                    used_area.append(stone_rect)
+
+                    # 更明显的随机化石块颜色
+                    stone_color_var = random.randint(-15, 15)
+                    stone_color = (
+                        max(25, min(75, base_color[0] + stone_color_var)),
+                        max(25, min(75, base_color[1] + stone_color_var)),
+                        max(25, min(75, base_color[2] + stone_color_var))
+                    )
+
+                    # 圆角矩形模拟石块，边缘更不规则
+                    border_radius = random.randint(1, 5)  # 更多样的圆角半径
+
+                    # 添加不规则性: 微妙的凹凸变形
+                    if random.random() < 0.4:  # 40%的石块有不规则边缘
+                        # 绘制基础石块
+                        pygame.draw.rect(surface, stone_color, stone_rect, border_radius=border_radius)
+
+                        # 添加凹凸不平的边缘效果
+                        edge_count = random.randint(2, 4)
+                        for i in range(edge_count):
+                            edge_x = stone_rect.left + random.randint(0, stone_rect.width)
+                            edge_y = stone_rect.top + random.randint(0, stone_rect.height)
+
+                            # 只在边缘附近添加变形
+                            distance_to_edge = min(
+                                abs(edge_x - stone_rect.left),
+                                abs(edge_x - stone_rect.right),
+                                abs(edge_y - stone_rect.top),
+                                abs(edge_y - stone_rect.bottom)
+                            )
+
+                            if distance_to_edge < 5:  # 只在边缘5像素内添加变形
+                                # 随机突起或凹陷
+                                bump_size = random.randint(1, 3)
+                                if random.random() < 0.5:  # 突起
+                                    bump_color = (min(255, stone_color[0] + 10),
+                                                  min(255, stone_color[1] + 10),
+                                                  min(255, stone_color[2] + 10))
+                                else:  # 凹陷
+                                    bump_color = (max(0, stone_color[0] - 10),
+                                                  max(0, stone_color[1] - 10),
+                                                  max(0, stone_color[2] - 10))
+                                pygame.draw.circle(surface, bump_color, (edge_x, edge_y), bump_size)
+                    else:
+                        # 普通石块
+                        pygame.draw.rect(surface, stone_color, stone_rect, border_radius=border_radius)
+
+                    # 添加石块高光 (左上) - 更自然的边缘光效
+                    highlight_width = random.randint(1, 2)
+                    highlight_alpha = random.randint(60, 120)
+                    highlight_color = (min(255, COLOR_HIGHLIGHT[0] + random.randint(-10, 10)),
+                                       min(255, COLOR_HIGHLIGHT[1] + random.randint(-10, 10)),
+                                       min(255, COLOR_HIGHLIGHT[2] + random.randint(-10, 10)))
+
+                    # 高光不一定完整覆盖边缘
+                    high_len1 = random.randint(int(stone_rect.width * 0.3), int(stone_rect.width * 0.9))
+                    high_len2 = random.randint(int(stone_rect.height * 0.3), int(stone_rect.height * 0.9))
+
+                    pygame.draw.line(surface, highlight_color,
+                                     (stone_rect.left + border_radius, stone_rect.top + border_radius),
+                                     (stone_rect.left + border_radius + high_len1, stone_rect.top + border_radius),
+                                     highlight_width)
+                    pygame.draw.line(surface, highlight_color,
+                                     (stone_rect.left + border_radius, stone_rect.top + border_radius),
+                                     (stone_rect.left + border_radius, stone_rect.top + border_radius + high_len2),
+                                     highlight_width)
+
+                    # 添加石块阴影 (右下) - 不均匀阴影
+                    shadow_width = random.randint(1, 2)
+                    shadow_alpha = random.randint(80, 140)
+                    shadow_color = (max(0, COLOR_SHADOW[0] + random.randint(-10, 10)),
+                                    max(0, COLOR_SHADOW[1] + random.randint(-10, 10)),
+                                    max(0, COLOR_SHADOW[2] + random.randint(-10, 10)))
+
+                    # 阴影也不完全规则
+                    shadow_len1 = random.randint(int(stone_rect.width * 0.4), int(stone_rect.width * 0.9))
+                    shadow_len2 = random.randint(int(stone_rect.height * 0.4), int(stone_rect.height * 0.9))
+
+                    pygame.draw.line(surface, shadow_color,
+                                     (stone_rect.left + border_radius, stone_rect.bottom - border_radius),
+                                     (stone_rect.left + border_radius + shadow_len1, stone_rect.bottom - border_radius),
+                                     shadow_width)
+                    pygame.draw.line(surface, shadow_color,
+                                     (stone_rect.right - border_radius, stone_rect.top + border_radius),
+                                     (stone_rect.right - border_radius, stone_rect.top + border_radius + shadow_len2),
+                                     shadow_width)
+
+                    break  # 放置成功，跳出尝试循环
+
+        # 根据预生成样式添加特殊效果
         if style['type'] == 'moss':
-            self.draw_moss_stone(x, y, style, surface)
+            self.draw_moss_stone_enhanced(x, y, style, surface, used_area)
         elif style['type'] == 'cracked':
-            self.draw_cracked_stone(x, y, style, surface)
+            self.draw_cracked_stone_enhanced(x, y, style, surface, used_area)
         else:
-            self.draw_basic_stone(x, y, style, surface)
+            self.draw_basic_stone_enhanced(x, y, style, surface, used_area)
 
-        self.draw_stone_shading(x, y, surface)
+        # 石块缝隙细节 - 增加不规则的砂浆填充
+        self._add_mortar_details(rect, used_area, surface)
 
-    def draw_basic_stone(self, x, y, style, surface=None):
-        surface = surface or self.screen
-        """绘制基础石墙（使用预生成高光点）"""
+        # 墙体边缘风化效果
+        if random.random() < 0.3:  # 30%概率出现边缘风化
+            self._add_weathered_edges(rect, surface)
+
+        # 重置随机种子
+        random.seed()
+
+    def _add_mortar_details(self, rect, stone_areas, surface):
+        mortar_color = (COLOR_SHADOW[0] + 15, COLOR_SHADOW[1] + 15, COLOR_SHADOW[2] + 15)
+
+        # 在石块间隙处添加细小石粒和碎屑
+        for _ in range(8):
+            pebble_x = rect.left + random.randint(2, TILE_SIZE - 2)
+            pebble_y = rect.top + random.randint(2, TILE_SIZE - 2)
+
+            # 检查是否在石块缝隙中
+            in_gap = True
+            for stone in stone_areas:
+                if stone.collidepoint(pebble_x, pebble_y):
+                    in_gap = False
+                    break
+
+            if in_gap:
+                # 随机碎屑类型: 小石粒或砂浆点
+                if random.random() < 0.7:
+                    # 小石粒 - 更多样化的颜色
+                    pebble_size = random.randint(1, 2)
+                    pebble_color = (
+                        COLOR_STONE[0] - 20 + random.randint(0, 40),
+                        COLOR_STONE[1] - 20 + random.randint(0, 40),
+                        COLOR_STONE[2] - 20 + random.randint(0, 40)
+                    )
+                    pygame.draw.circle(surface, pebble_color, (pebble_x, pebble_y), pebble_size)
+                else:
+                    # 砂浆点 - 不规则形状
+                    mortar_size = random.randint(2, 4)
+                    mortar_color_var = (
+                        mortar_color[0] + random.randint(-10, 10),
+                        mortar_color[1] + random.randint(-10, 10),
+                        mortar_color[2] + random.randint(-10, 10)
+                    )
+                    # 不规则形状的砂浆点
+                    points = []
+                    for i in range(5):
+                        angle = i * 2 * math.pi / 5
+                        dist = mortar_size * random.uniform(0.7, 1.0)
+                        px = pebble_x + math.cos(angle) * dist
+                        py = pebble_y + math.sin(angle) * dist
+                        points.append((px, py))
+                    pygame.draw.polygon(surface, mortar_color_var, points)
+
+    def _add_weathered_edges(self, rect, surface):
+        """添加墙体边缘风化和不规则效果"""
+        # 选择一个边缘进行风化
+        edge = random.choice(['top', 'right', 'bottom', 'left'])
+
+        # 风化深度
+        depth = random.randint(1, 3)
+
+        # 风化长度和位置 - 确保范围有效
+        if edge in ['top', 'bottom']:
+            # 确保长度不会超出有效范围
+            max_length = max(TILE_SIZE // 4, (TILE_SIZE * 3 // 4) - (TILE_SIZE // 4))
+            length = random.randint(TILE_SIZE // 4, min(TILE_SIZE // 2, max_length))
+
+            # 确保起始位置有足够空间
+            max_start = max(TILE_SIZE // 4, (TILE_SIZE * 3 // 4) - length)
+            if max_start <= TILE_SIZE // 4:  # 如果最大起始位置小于等于最小起始位置
+                start_pos = rect.left + TILE_SIZE // 4
+            else:
+                start_pos = rect.left + random.randint(TILE_SIZE // 4, max_start)
+        else:  # left or right
+            # 确保长度不会超出有效范围
+            max_length = max(TILE_SIZE // 4, (TILE_SIZE * 3 // 4) - (TILE_SIZE // 4))
+            length = random.randint(TILE_SIZE // 4, min(TILE_SIZE // 2, max_length))
+
+            # 确保起始位置有足够空间
+            max_start = max(TILE_SIZE // 4, (TILE_SIZE * 3 // 4) - length)
+            if max_start <= TILE_SIZE // 4:  # 如果最大起始位置小于等于最小起始位置
+                start_pos = rect.top + TILE_SIZE // 4
+            else:
+                start_pos = rect.top + random.randint(TILE_SIZE // 4, max_start)
+
+        # 安全检查 - 确保长度至少为1
+        length = max(1, length)
+
+        # 绘制风化效果 - 通过添加与背景色相近的细小碎片
+        weathered_color = (50, 50, 50)  # 深色风化痕迹
+
+        # 生成不规则风化纹理
+        for i in range(length):
+            for j in range(depth):
+                # 更自然的风化退化
+                if random.random() < (1 - j / max(1, depth)):  # 越靠近边缘概率越高，防止除以零
+                    if edge == 'top':
+                        wx = start_pos + i
+                        wy = rect.top + j
+                    elif edge == 'right':
+                        wx = rect.right - j - 1
+                        wy = start_pos + i
+                    elif edge == 'bottom':
+                        wx = start_pos + i
+                        wy = rect.bottom - j - 1
+                    else:  # left
+                        wx = rect.left + j
+                        wy = start_pos + i
+
+                    # 确保坐标在有效范围内
+                    if (rect.left <= wx < rect.right and
+                            rect.top <= wy < rect.bottom):
+                        # 随机化风化颜色
+                        w_color = (
+                            weathered_color[0] + random.randint(-10, 10),
+                            weathered_color[1] + random.randint(-10, 10),
+                            weathered_color[2] + random.randint(-10, 10)
+                        )
+
+                        # 绘制风化点
+                        if random.random() < 0.8:  # 80%概率绘制
+                            pygame.draw.rect(surface, w_color, (wx, wy, 1, 1))
+
+    def draw_moss_stone_enhanced(self, x, y, style, surface, stone_areas):
+        """绘制增强版青苔石墙，带有更自然的青苔生长模式"""
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 
-        # 砖缝（保持不变）
-        for i in range(0, TILE_SIZE, 6):
-            pygame.draw.line(surface, COLOR_SHADOW,
-                             (rect.left + i, rect.top),
-                             (rect.left + i, rect.bottom), 1)
-        # 使用预生成的高光点
-        for px, py in style['highlights']:
-            pygame.draw.circle(surface, COLOR_HIGHLIGHT,
-                               (rect.left + px, rect.top + py), 1)
+        # 随机青苔密度
+        moss_density = random.uniform(0.6, 1.2)  # 随机化青苔生长密度
 
-    def draw_moss_stone(self, x, y, style, surface=None):
-        surface = surface or self.screen
-        """绘制青苔石墙（使用预生成参数）"""
+        # 在石块之间的缝隙添加青苔 - 更多样化的青苔斑点
+        for i in range(int(7 * moss_density)):
+            # 随机位置和大小
+            moss_x = rect.left + random.randint(2, TILE_SIZE - 2)
+            moss_y = rect.top + random.randint(2, TILE_SIZE - 2)
+            moss_size = random.randint(2, 6)  # 更大更明显的青苔斑点
+
+            # 检查是否在石块缝隙中
+            in_gap = True
+            for stone in stone_areas:
+                if stone.collidepoint(moss_x, moss_y):
+                    in_gap = False
+                    break
+
+            if in_gap:
+                # 随机化青苔颜色
+                moss_color_var = random.randint(-20, 20)
+                moss_color = (
+                    max(0, COLOR_MOSS[0] + moss_color_var),
+                    max(20, COLOR_MOSS[1] + moss_color_var),
+                    max(0, COLOR_MOSS[2] + moss_color_var)
+                )
+
+                # 创建不规则的青苔形状 - 带有随机变形的多边形
+                if random.random() < 0.7:  # 70%是不规则多边形
+                    moss_points = []
+                    for j in range(5 + random.randint(0, 3)):  # 5-8边形
+                        angle = j * 2 * math.pi / (5 + random.randint(0, 3))
+                        px = moss_x + math.cos(angle) * moss_size * random.uniform(0.6, 1.2)
+                        py = moss_y + math.sin(angle) * moss_size * random.uniform(0.6, 1.2)
+                        moss_points.append((px, py))
+                    pygame.draw.polygon(surface, moss_color, moss_points)
+                else:  # 30%是简单圆形
+                    pygame.draw.circle(surface, moss_color, (moss_x, moss_y), moss_size)
+
+                # 添加青苔高光和细节
+                if random.random() < 0.5:  # 一半的青苔有高光
+                    highlight_color = (moss_color[0] + 30, moss_color[1] + 30, moss_color[2] + 30)
+                    highlight_size = max(1, moss_size // 3)
+                    highlight_offset = random.randint(-2, 2)  # 随机偏移
+                    pygame.draw.circle(surface, highlight_color,
+                                       (int(moss_x + highlight_offset), int(moss_y - highlight_offset)),
+                                       highlight_size)
+
+        # 在一些石块上添加青苔覆盖 - 更自然的生长模式
+        for stone in random.sample(stone_areas, min(3, len(stone_areas))):
+            # 随机化青苔覆盖模式
+            coverage_style = random.choice(['top', 'corner', 'side', 'partial'])
+
+            # 检查石块大小，过小则使用简单覆盖
+            if stone.width < 9 or stone.height < 9:
+                # 简单覆盖，避免过复杂的计算
+                moss_rect = pygame.Rect(
+                    stone.left,
+                    stone.top,
+                    max(3, stone.width),
+                    max(3, min(stone.height, int(stone.height * 0.3)))
+                )
+            else:
+                if coverage_style == 'top':
+                    # 顶部覆盖
+                    coverage = random.uniform(0.2, 0.5)  # 覆盖比例
+                    moss_height = max(3, int(stone.height * coverage))
+                    moss_rect = pygame.Rect(stone.left, stone.top, stone.width, moss_height)
+                elif coverage_style == 'corner':
+                    # 角落覆盖 - 确保尺寸合理
+                    corner_min = max(3, stone.width // 4)
+                    corner_max = max(corner_min, stone.width // 2)
+                    corner_size = random.randint(corner_min, corner_max)
+
+                    corner = random.choice(['tl', 'tr', 'bl', 'br'])
+                    if corner == 'tl':
+                        moss_rect = pygame.Rect(stone.left, stone.top, corner_size, corner_size)
+                    elif corner == 'tr':
+                        moss_rect = pygame.Rect(stone.right - corner_size, stone.top, corner_size, corner_size)
+                    elif corner == 'bl':
+                        moss_rect = pygame.Rect(stone.left, stone.bottom - corner_size, corner_size, corner_size)
+                    else:  # 'br'
+                        moss_rect = pygame.Rect(stone.right - corner_size, stone.bottom - corner_size, corner_size,
+                                                corner_size)
+                elif coverage_style == 'side':
+                    # 侧面覆盖 - 确保尺寸合理
+                    side = random.choice(['left', 'right', 'top', 'bottom'])
+                    if side in ['left', 'right']:
+                        side_min = 3
+                        side_max = max(side_min, stone.width // 3)
+                        side_width = random.randint(side_min, side_max)
+                        side_height = stone.height
+
+                        if side == 'left':
+                            moss_rect = pygame.Rect(stone.left, stone.top, side_width, side_height)
+                        else:  # 'right'
+                            moss_rect = pygame.Rect(stone.right - side_width, stone.top, side_width, side_height)
+                    else:  # 'top' or 'bottom'
+                        side_width = stone.width
+                        side_min = 3
+                        side_max = max(side_min, stone.height // 3)
+                        side_height = random.randint(side_min, side_max)
+
+                        if side == 'top':
+                            moss_rect = pygame.Rect(stone.left, stone.top, side_width, side_height)
+                        else:  # 'bottom'
+                            moss_rect = pygame.Rect(stone.left, stone.bottom - side_height, side_width, side_height)
+                else:  # 'partial'
+                    # 不规则部分覆盖 - 确保宽高都是正数
+                    max_width_offset = max(0, stone.width // 3 - 1)  # 确保留有空间
+                    max_height_offset = max(0, stone.height // 3 - 1)  # 确保留有空间
+
+                    start_x = stone.left + random.randint(0, max_width_offset)
+                    start_y = stone.top + random.randint(0, max_height_offset)
+
+                    # 确保宽高至少为3像素
+                    width = max(3, stone.width - random.randint(0, stone.width // 3))
+                    height = max(3, stone.height - random.randint(0, stone.height // 3))
+
+                    moss_rect = pygame.Rect(start_x, start_y, width, height)
+
+            # 随机化青苔颜色 - 更多变化
+            moss_color_var = random.randint(-15, 15)
+            moss_color = (
+                max(0, COLOR_MOSS[0] + moss_color_var),
+                max(20, COLOR_MOSS[1] + moss_color_var),
+                max(0, COLOR_MOSS[2] + moss_color_var)
+            )
+
+            # 使用半透明叠加效果 - 多层渐变
+            for i in range(3):
+                layer_height = max(1, moss_rect.height - i * 2)  # 确保高度至少为1
+                if layer_height <= 0:
+                    continue
+
+                alpha = random.randint(130, 170) - i * 30  # 随机透明度
+                moss_layer = pygame.Surface((moss_rect.width, layer_height), pygame.SRCALPHA)
+                moss_layer.fill((moss_color[0], moss_color[1], moss_color[2], alpha))
+                surface.blit(moss_layer, (moss_rect.left, moss_rect.top + i * 2))
+
+                # 添加青苔细节纹理，但只在足够大的区域添加
+            if moss_rect.width > 5 and moss_rect.height > 5:
+                for _ in range(random.randint(2, 4)):  # 减少详细纹理数量
+                    # 防止无效的随机范围
+                    x_max = max(2, moss_rect.width - 3)
+                    y_max = max(2, moss_rect.height - 3)
+
+                    detail_x = moss_rect.left + random.randint(2, x_max)
+                    detail_y = moss_rect.top + random.randint(2, y_max)
+                    detail_size = random.randint(1, 2)  # 减小纹理尺寸
+                    detail_type = random.choice(['dot', 'line'])
+
+                    # 青苔纹理细节颜色
+                    detail_color = (
+                        max(0, moss_color[0] - random.randint(10, 30)),
+                        max(20, moss_color[1] - random.randint(10, 30)),
+                        max(0, moss_color[2] - random.randint(10, 30))
+                    )
+
+                    if detail_type == 'dot':
+                        pygame.draw.circle(surface, detail_color, (detail_x, detail_y), detail_size)
+                    else:  # 'line'
+                        line_length = random.randint(2, 4)  # 减小线长
+                        line_angle = random.randint(0, 180)
+                        end_x = detail_x + int(math.cos(math.radians(line_angle)) * line_length)
+                        end_y = detail_y + int(math.sin(math.radians(line_angle)) * line_length)
+                        pygame.draw.line(surface, detail_color, (detail_x, detail_y), (end_x, end_y), 1)
+
+    def draw_cracked_stone_enhanced(self, x, y, style, surface, stone_areas):
+        """绘制增强版裂缝石墙，带有更自然的裂缝纹理和应力线"""
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 
-        # 绘制预先生成的青苔点
-        for px, py in style['moss_pos']:
-            pygame.draw.circle(surface, COLOR_MOSS,
-                               (rect.left + px, rect.top + py), 1)
+        # 随机裂缝复杂度
+        crack_complexity = random.uniform(0.8, 1.2)  # 随机化裂缝复杂度
 
-        # 其他固定绘制（如底部青苔带）
-        pygame.draw.rect(surface, COLOR_MOSS,
-                         (rect.left + 2, rect.bottom - 4, TILE_SIZE - 4, 3))
+        # 绘制贯穿整个墙体的主裂缝
+        crack_width = max(1, min(3, int(random.randint(1, 3) * crack_complexity)))
 
-    def draw_cracked_stone(self, x, y, style, surface=None):
-        surface = surface or self.screen
-        """绘制裂缝石墙（使用预生成参数）"""
+        # 更自然的裂缝起点和终点
+        edge_start = random.choice(['top', 'left', 'right'])
+        if edge_start == 'top':
+            crack_start = (rect.left + random.randint(TILE_SIZE // 4, TILE_SIZE * 3 // 4),
+                           rect.top)
+        elif edge_start == 'left':
+            crack_start = (rect.left,
+                           rect.top + random.randint(TILE_SIZE // 4, TILE_SIZE * 3 // 4))
+        else:  # 'right'
+            crack_start = (rect.right,
+                           rect.top + random.randint(TILE_SIZE // 4, TILE_SIZE * 3 // 4))
+
+        # 裂缝终点通常在下方或对面边缘
+        if random.random() < 0.7:  # 70%几率终点在底部
+            crack_end = (rect.left + random.randint(TILE_SIZE // 4, TILE_SIZE * 3 // 4),
+                         rect.bottom)
+        else:  # 30%几率终点在侧面
+            if edge_start == 'left':
+                crack_end = (rect.right,
+                             rect.top + random.randint(TILE_SIZE // 4, TILE_SIZE * 3 // 4))
+            else:
+                crack_end = (rect.left,
+                             rect.top + random.randint(TILE_SIZE // 4, TILE_SIZE * 3 // 4))
+
+        # 使用贝塞尔曲线绘制更自然的裂缝
+        control_points = []
+        num_segments = max(3, min(7, int(random.randint(3, 5) * crack_complexity)))
+
+        # 生成控制点
+        control_points.append(crack_start)
+
+        # 确保裂缝穿过一些石块 - 增加故事性
+        stones_on_path = []
+        for stone in stone_areas:
+            # 检查石块是否在裂缝可能路径上
+            if (min(crack_start[0], crack_end[0]) <= stone.centerx <= max(crack_start[0], crack_end[0]) and
+                    min(crack_start[1], crack_end[1]) <= stone.centery <= max(crack_start[1], crack_end[1])):
+                stones_on_path.append(stone)
+
+        # 如果路径上有石块，优先穿过它们
+        if stones_on_path:
+            # 按照从开始到结束的顺序排序石块
+            if abs(crack_end[0] - crack_start[0]) > abs(crack_end[1] - crack_start[1]):
+                # 主要是水平裂缝
+                stones_on_path.sort(key=lambda s: s.centerx)
+                if crack_start[0] > crack_end[0]:  # 确保排序方向正确
+                    stones_on_path.reverse()
+            else:
+                # 主要是垂直裂缝
+                stones_on_path.sort(key=lambda s: s.centery)
+                if crack_start[1] > crack_end[1]:  # 确保排序方向正确
+                    stones_on_path.reverse()
+
+            # 穿过所选石块
+            for stone in stones_on_path:
+                control_points.append((stone.centerx + random.randint(-5, 5),
+                                       stone.centery + random.randint(-5, 5)))
+
+        # 添加中间控制点，确保足够的弯曲
+        remaining_segments = num_segments - len(control_points)
+        for i in range(remaining_segments):
+            # 更自然的控制点分布
+            ratio = (i + 1) / (remaining_segments + 1)
+            base_x = crack_start[0] + (crack_end[0] - crack_start[0]) * ratio
+            base_y = crack_start[1] + (crack_end[1] - crack_start[1]) * ratio
+
+            # 随机偏移，越靠近中间的控制点偏移越大
+            offset_factor = ratio * (1 - ratio) * 4  # 在中心处达到最大
+            offset_range = int(TILE_SIZE // 4 * offset_factor)
+            offset_x = random.randint(-offset_range, offset_range)
+            offset_y = random.randint(-offset_range, offset_range)
+
+            control_points.append((base_x + offset_x, base_y + offset_y))
+
+        # 添加终点
+        control_points.append(crack_end)
+
+        # 绘制裂缝段 - 多层次细节
+        for i in range(len(control_points) - 1):
+            start_point = control_points[i]
+            end_point = control_points[i + 1]
+
+            # 添加微小的随机扰动，使裂缝更自然
+            mid_segments = random.randint(2, 4)  # 中间分段，增加自然曲折感
+            last_point = start_point
+
+            for j in range(mid_segments):
+                # 确定段落点
+                t = (j + 1) / (mid_segments + 1)
+                mid_x = start_point[0] * (1 - t) + end_point[0] * t
+                mid_y = start_point[1] * (1 - t) + end_point[1] * t
+
+                # 添加随机扰动，模拟自然裂缝的不规则性
+                noise_factor = min(10, max(2, int((TILE_SIZE // 10) * crack_complexity)))
+                noise_x = random.randint(-noise_factor, noise_factor)
+                noise_y = random.randint(-noise_factor, noise_factor)
+
+                # 裂缝颜色随机变化
+                crack_color = (
+                    max(10, COLOR_CRACK[0] + random.randint(-20, 10)),
+                    max(10, COLOR_CRACK[1] + random.randint(-20, 10)),
+                    max(10, COLOR_CRACK[2] + random.randint(-20, 10))
+                )
+
+                # 当前段点
+                current_point = (mid_x + noise_x, mid_y + noise_y)
+
+                # 绘制段落，线宽有细微变化
+                segment_width = max(1, int(crack_width * (1 - 0.3 * random.random())))
+                pygame.draw.line(surface, crack_color, last_point, current_point, segment_width)
+
+                # 记录上一点
+                last_point = current_point
+
+            # 连接到终点
+            pygame.draw.line(surface, COLOR_CRACK, last_point, end_point, crack_width)
+
+            # 在裂缝周围添加阴影和碎石效果
+            for j in range(random.randint(1, 3)):
+                edge_x = (start_point[0] + end_point[0]) / 2 + random.randint(-10, 10)
+                edge_y = (start_point[1] + end_point[1]) / 2 + random.randint(-10, 10)
+
+                # 裂缝边缘碎石
+                if random.random() < 0.6:
+                    debris_size = random.randint(1, 2)
+                    debris_color = (
+                        max(0, COLOR_SHADOW[0] - 10 + random.randint(0, 20)),
+                        max(0, COLOR_SHADOW[1] - 10 + random.randint(0, 20)),
+                        max(0, COLOR_SHADOW[2] - 10 + random.randint(0, 20))
+                    )
+                    pygame.draw.circle(surface, debris_color,
+                                       (int(edge_x), int(edge_y)), debris_size)
+
+                # 裂缝阴影效果
+                if random.random() < 0.4:
+                    shadow_offset = random.randint(1, 3)
+                    shadow_color = (COLOR_SHADOW[0], COLOR_SHADOW[1], COLOR_SHADOW[2], 120)
+                    shadow_surface = pygame.Surface((3, 3), pygame.SRCALPHA)
+                    pygame.draw.circle(shadow_surface, shadow_color, (1, 1), 1)
+                    surface.blit(shadow_surface, (int(edge_x - 1), int(edge_y - 1 + shadow_offset)))
+
+        # 添加小裂缝分支 - 更随机的分布
+        branch_count = max(2, min(5, int(random.randint(2, 4) * crack_complexity)))
+        for _ in range(branch_count):
+            # 从控制点中随机选择一个作为分支起点
+            if len(control_points) >= 2:
+                branch_idx = random.randint(0, len(control_points) - 2)
+                branch_start = control_points[branch_idx]
+
+                # 分支属性
+                branch_length = random.randint(5, 15)
+                branch_width = max(1, crack_width - 1)  # 分支略细于主裂缝
+
+                # 分支方向 - 与主裂缝形成一定角度
+                if branch_idx < len(control_points) - 1:
+                    main_dx = control_points[branch_idx + 1][0] - control_points[branch_idx][0]
+                    main_dy = control_points[branch_idx + 1][1] - control_points[branch_idx][1]
+
+                    # 计算垂直方向
+                    if abs(main_dx) + abs(main_dy) > 0.001:  # 避免除零
+                        # 垂直于主裂缝方向
+                        perp_dx = -main_dy
+                        perp_dy = main_dx
+                        # 归一化
+                        length = math.sqrt(perp_dx ** 2 + perp_dy ** 2)
+                        perp_dx /= length
+                        perp_dy /= length
+
+                        # 添加随机角度偏移
+                        branch_angle = random.uniform(-math.pi / 3, math.pi / 3)  # 相对垂直±60度
+                        cos_angle = math.cos(branch_angle)
+                        sin_angle = math.sin(branch_angle)
+                        final_dx = (perp_dx * cos_angle - perp_dy * sin_angle) * branch_length
+                        final_dy = (perp_dx * sin_angle + perp_dy * cos_angle) * branch_length
+
+                        branch_end = (branch_start[0] + final_dx, branch_start[1] + final_dy)
+
+                        # 检查分支是否超出墙体范围
+                        if (rect.left <= branch_end[0] <= rect.right and
+                                rect.top <= branch_end[1] <= rect.bottom):
+                            # 绘制分支
+                            branch_color = (
+                                max(10, COLOR_CRACK[0] + random.randint(-10, 10)),
+                                max(10, COLOR_CRACK[1] + random.randint(-10, 10)),
+                                max(10, COLOR_CRACK[2] + random.randint(-10, 10))
+                            )
+
+                            # 更自然的分叉裂缝
+                            if random.random() < 0.7:  # 70%概率绘制曲折分支
+                                # 添加中间点使分支更曲折
+                                mid_x = branch_start[0] + final_dx * 0.5 + random.randint(-4, 4)
+                                mid_y = branch_start[1] + final_dy * 0.5 + random.randint(-4, 4)
+                                mid_point = (mid_x, mid_y)
+
+                                pygame.draw.line(surface, branch_color, branch_start, mid_point, branch_width)
+                                pygame.draw.line(surface, branch_color, mid_point, branch_end, branch_width)
+                            else:  # 30%概率绘制直线分支
+                                pygame.draw.line(surface, branch_color, branch_start, branch_end, branch_width)
+
+                            # 添加微小的碎石碎片
+                            if random.random() < 0.5:
+                                debris_x = branch_end[0] + random.randint(-3, 3)
+                                debris_y = branch_end[1] + random.randint(-3, 3)
+                                debris_size = random.randint(1, 2)
+                                pygame.draw.circle(surface, branch_color,
+                                                   (int(debris_x), int(debris_y)), debris_size)
+
+    def draw_basic_stone_enhanced(self, x, y, style, surface, stone_areas):
+        """绘制增强版基础石墙，带有更丰富的纹理细节"""
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 
-        # 主裂缝
-        pygame.draw.line(surface, COLOR_CRACK,
-                         (rect.left + style['crack_start'][0], rect.top + style['crack_start'][1]),
-                         (rect.left + style['crack_end'][0], rect.top + style['crack_end'][1]), 2)
+        # 在石块上添加细节纹理 - 随机增加多种纹理类型
+        for stone in stone_areas:
+            texture_type = random.choice(['lines', 'dots', 'bands', 'none'])
 
-        # 细小裂痕
-        for sx, sy in style['small_cracks']:
-            ex = sx + random.randint(-4, 4)
-            ey = sy + random.randint(-4, 4)
-            pygame.draw.line(surface, COLOR_CRACK,
-                             (rect.left + sx, rect.top + sy),
-                             (rect.left + ex, rect.top + ey), 1)
+            if texture_type == 'lines':
+                # 随机数量的石纹线条
+                num_lines = random.randint(2, 4)
+                for _ in range(num_lines):
+                    # 随机线条位置和属性
+                    line_y = stone.top + random.randint(stone.height // 5, stone.height * 4 // 5)
+                    line_width = random.randint(1, 2)
+                    line_alpha = random.randint(100, 180)
+                    line_color = (max(0, COLOR_SHADOW[0] - 5),
+                                  max(0, COLOR_SHADOW[1] - 5),
+                                  max(0, COLOR_SHADOW[2] - 5))
 
-    def draw_stone_shading(self, x, y, surface=None):
-        surface = surface or self.screen
-        """绘制石墙立体阴影效果"""
-        rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    # 随机线条长度和位置
+                    line_start_x = stone.left + random.randint(1, stone.width // 3)
+                    line_end_x = stone.right - random.randint(1, stone.width // 3)
 
-        # 左侧阴影
-        shade = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
-        shade.fill((0, 0, 0, 40))
-        self.screen.blit(shade, rect.topleft)
+                    # 带有微小弯曲和不规则的线条
+                    if random.random() < 0.7:  # 70%概率是弯曲线条
+                        mid_y_offset = random.randint(-3, 3)
+                        mid_x = (line_start_x + line_end_x) // 2
+                        mid_y = line_y + mid_y_offset
 
-        # 砖块凸起效果
-        for i in range(0, TILE_SIZE, 6):
-            for j in range(0, TILE_SIZE, 6):
-                if (i + j) % 12 == 0:
-                    pygame.draw.line(surface, COLOR_HIGHLIGHT,
-                                     (rect.left + i, rect.top + j),
-                                     (rect.left + i + 4, rect.top + j), 1)
-                    pygame.draw.line(surface, COLOR_HIGHLIGHT,
-                                     (rect.left + i, rect.top + j),
-                                     (rect.left + i, rect.top + j + 4), 1)
+                        pygame.draw.line(surface, line_color,
+                                         (line_start_x, line_y), (mid_x, mid_y), line_width)
+                        pygame.draw.line(surface, line_color,
+                                         (mid_x, mid_y), (line_end_x, line_y), line_width)
+                    else:  # 30%概率是直线
+                        pygame.draw.line(surface, line_color,
+                                         (line_start_x, line_y), (line_end_x, line_y), line_width)
 
-        # 顶部高光
-        pygame.draw.line(surface, COLOR_HIGHLIGHT,
-                         (rect.left, rect.top), (rect.right, rect.top), 2)
-        # 左侧高光
-        pygame.draw.line(surface, COLOR_HIGHLIGHT,
-                         (rect.left, rect.top), (rect.left, rect.bottom), 2)
+            elif texture_type == 'dots':
+                # 石块上的斑点纹理
+                num_dots = random.randint(4, 8)
+                for _ in range(num_dots):
+                    dot_x = stone.left + random.randint(2, stone.width - 3)
+                    dot_y = stone.top + random.randint(2, stone.height - 3)
+                    dot_size = random.randint(1, 2)
+                    dot_color = (max(0, COLOR_SHADOW[0] - 10 + random.randint(0, 20)),
+                                 max(0, COLOR_SHADOW[1] - 10 + random.randint(0, 20)),
+                                 max(0, COLOR_SHADOW[2] - 10 + random.randint(0, 20)))
+
+                    pygame.draw.circle(surface, dot_color, (dot_x, dot_y), dot_size)
+
+            elif texture_type == 'bands':
+                # 条带纹理 - 模拟自然石层
+                num_bands = random.randint(2, 3)
+                band_height = stone.height // (num_bands + 1)
+
+                for i in range(num_bands):
+                    band_y = stone.top + (i + 1) * band_height
+                    band_width = max(1, min(2, int(stone.width * random.uniform(0.6, 0.9))))
+                    band_color = (max(0, COLOR_SHADOW[0] - 5 + random.randint(-10, 10)),
+                                  max(0, COLOR_SHADOW[1] - 5 + random.randint(-10, 10)),
+                                  max(0, COLOR_SHADOW[2] - 5 + random.randint(-10, 10)))
+
+                    # 随机带偏移
+                    start_offset = random.randint(1, stone.width // 4)
+                    end_offset = random.randint(1, stone.width // 4)
+                    band_start_x = stone.left + start_offset
+                    band_end_x = stone.right - end_offset
+
+                    pygame.draw.line(surface, band_color,
+                                     (band_start_x, band_y), (band_end_x, band_y), band_width)
+
+        # 添加石块之间的灰浆线 - 更不规则的灰浆纹理
+        mortar_color = (COLOR_SHADOW[0] + 20, COLOR_SHADOW[1] + 20, COLOR_SHADOW[2] + 20)
+
+        # 水平灰浆线 - 不再完全水平
+        for y_base in range(rect.top + TILE_SIZE // 3, rect.bottom, TILE_SIZE // 3):
+            # 检查是否穿过石块中部
+            crosses_stone = False
+            for stone in stone_areas:
+                if (y_base > stone.top + 5 and y_base < stone.bottom - 5):
+                    crosses_stone = True
+                    break
+
+            if not crosses_stone:
+                # 分段绘制，实现不规则灰浆线
+                segments = random.randint(2, 4)
+                segment_width = TILE_SIZE / segments
+
+                for s in range(segments):
+                    line_width = random.randint(1, 2)
+                    # 随机化线段Y坐标
+                    y_pos = y_base + random.randint(-2, 2)
+
+                    # 计算线段起止X坐标
+                    start_x = rect.left + int(s * segment_width)
+                    end_x = start_x + int(segment_width)
+
+                    # 随机墙缝颜色
+                    mortar_var = random.randint(-10, 10)
+                    current_mortar_color = (
+                        max(20, mortar_color[0] + mortar_var),
+                        max(20, mortar_color[1] + mortar_var),
+                        max(20, mortar_color[2] + mortar_var)
+                    )
+
+                    pygame.draw.line(surface, current_mortar_color,
+                                     (start_x, y_pos), (end_x, y_pos), line_width)
+
+                    # 添加随机灰浆碎屑
+                    if random.random() < 0.3:
+                        debris_x = random.randint(start_x, end_x)
+                        debris_y = y_pos + random.randint(-3, 3)
+                        pygame.draw.circle(surface, current_mortar_color,
+                                           (debris_x, debris_y), 1)
+
+        # 垂直灰浆线 - 不再完全垂直
+        for x_base in range(rect.left + TILE_SIZE // 3, rect.right, TILE_SIZE // 3):
+            # 检查是否穿过石块中部
+            crosses_stone = False
+            for stone in stone_areas:
+                if (x_base > stone.left + 5 and x_base < stone.right - 5):
+                    crosses_stone = True
+                    break
+
+            if not crosses_stone:
+                # 分段绘制，实现不规则灰浆线
+                segments = random.randint(2, 4)
+                segment_height = TILE_SIZE / segments
+
+                for s in range(segments):
+                    line_width = random.randint(1, 2)
+                    # 随机化线段X坐标
+                    x_pos = x_base + random.randint(-2, 2)
+
+                    # 计算线段起止Y坐标
+                    start_y = rect.top + int(s * segment_height)
+                    end_y = start_y + int(segment_height)
+
+                    # 随机墙缝颜色
+                    mortar_var = random.randint(-10, 10)
+                    current_mortar_color = (
+                        max(20, mortar_color[0] + mortar_var),
+                        max(20, mortar_color[1] + mortar_var),
+                        max(20, mortar_color[2] + mortar_var)
+                    )
+
+                    pygame.draw.line(surface, current_mortar_color,
+                                     (x_pos, start_y), (x_pos, end_y), line_width)
+
+                    # 添加随机灰浆碎屑
+                    if random.random() < 0.3:
+                        debris_x = x_pos + random.randint(-3, 3)
+                        debris_y = random.randint(start_y, end_y)
+                        pygame.draw.circle(surface, current_mortar_color,
+                                           (debris_x, debris_y), 1)
 
     # 地面绘画方法
     def draw_floor(self, x, y, surface=None):
+        """绘制地面，与周围环境相协调的增强版地面"""
         surface = surface or self.screen
-        is_fountain_room = False
-        if self.fountain_room:
-            if (self.fountain_room['x1'] <= x < self.fountain_room['x2'] and
-                    self.fountain_room['y1'] <= y < self.fountain_room['y2']):
-                is_fountain_room = True
-
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-        # 调整喷泉房间地板颜色和样式
-        if is_fountain_room:
-            base_color = tuple(c - 20 for c in COLOR_FLOOR)  # 更深的底色
-            pygame.draw.rect(surface, base_color, rect)
-            # 双倍裂缝密度
+        style = self.tile_styles[y][x]
+
+        # 处理特殊区域（喷泉房间、岩浆房间等）
+        if self.fountain_room and self._is_in_fountain_room(x, y):
+            self._draw_fountain_floor(rect, surface)
+            return
+        elif self.lava_room and self._is_in_lava_room(x, y):
+            if self.maze[y][x] == 3:  # 岩浆
+                self._draw_lava_floor(rect, surface)
+                return
+            elif self.maze[y][x] == 5 or self.maze[y][x] == 4:  # 地狱地板
+                self._draw_hell_floor(rect, surface)
+                return
+
+        # 基础地板颜色 - 微妙的变化使其更自然
+        base_color_var = random.randint(-10, 10)
+        base_color = (
+            max(130, min(170, COLOR_FLOOR[0] + base_color_var)),
+            max(130, min(170, COLOR_FLOOR[1] + base_color_var)),
+            max(130, min(170, COLOR_FLOOR[2] + base_color_var))
+        )
+        pygame.draw.rect(surface, base_color, rect)
+
+        # 添加纹理噪点以增强真实感
+        for _ in range(5):
+            noise_x = rect.left + random.randint(0, TILE_SIZE - 1)
+            noise_y = rect.top + random.randint(0, TILE_SIZE - 1)
+            noise_color = (
+                base_color[0] + random.randint(-5, 5),
+                base_color[1] + random.randint(-5, 5),
+                base_color[2] + random.randint(-5, 5)
+            )
+            pixel_size = random.randint(1, 2)
+            pygame.draw.rect(surface, noise_color, (noise_x, noise_y, pixel_size, pixel_size))
+
+        # 绘制边缘暗影以增加深度感
+        edge_shadow = (base_color[0] - 15, base_color[1] - 15, base_color[2] - 15)
+        shadow_width = 2
+
+        # 右边缘阴影
+        pygame.draw.rect(surface, edge_shadow,
+                         (rect.right - shadow_width, rect.top, shadow_width, rect.height))
+        # 底部阴影
+        pygame.draw.rect(surface, edge_shadow,
+                         (rect.left, rect.bottom - shadow_width, rect.width, shadow_width))
+
+        # 绘制水平裂缝
+        if style['crack_h']:
+            crack_y = rect.centery + random.randint(-2, 2)  # 位置随机化
+            crack_width = random.randint(TILE_SIZE // 2, TILE_SIZE - 4)  # 长度随机化
+            crack_start = rect.left + random.randint(2, (TILE_SIZE - crack_width) // 2)
+
+            # 主裂缝
             pygame.draw.line(surface, COLOR_FLOOR_CRACK,
-                             (rect.left + 2, rect.centery),
-                             (rect.right - 2, rect.centery), 2)
+                             (crack_start, crack_y),
+                             (crack_start + crack_width, crack_y),
+                             random.randint(1, 2))  # 宽度随机化
+
+            # 裂缝分支(小概率)
+            if random.random() < 0.3:
+                branch_start = crack_start + random.randint(crack_width // 4, 3 * crack_width // 4)
+                branch_length = random.randint(3, 7)
+                branch_angle = random.choice([-1, 1]) * random.uniform(0.5, 1.5)
+                branch_end = (
+                    branch_start + branch_length * math.cos(branch_angle),
+                    crack_y + branch_length * math.sin(branch_angle)
+                )
+                pygame.draw.line(surface, COLOR_FLOOR_CRACK,
+                                 (branch_start, crack_y), branch_end, 1)
+
+        # 绘制垂直裂缝
+        if style['crack_v']:
+            crack_x = rect.centerx + random.randint(-2, 2)  # 位置随机化
+            crack_height = random.randint(TILE_SIZE // 2, TILE_SIZE - 4)  # 长度随机化
+            crack_start = rect.top + random.randint(2, (TILE_SIZE - crack_height) // 2)
+
+            # 主裂缝
             pygame.draw.line(surface, COLOR_FLOOR_CRACK,
-                             (rect.centerx, rect.top + 2),
-                             (rect.centerx, rect.bottom - 2), 2)
-            # 添加额外对角线裂缝
-            if random.random() < 0.4:
-                start_x = rect.left + random.randint(2, TILE_SIZE - 2)
-                start_y = rect.top + random.randint(2, TILE_SIZE - 2)
-                end_x = start_x + random.randint(-8, 8)
-                end_y = start_y + random.randint(-8, 8)
+                             (crack_x, crack_start),
+                             (crack_x, crack_start + crack_height),
+                             random.randint(1, 2))  # 宽度随机化
+
+            # 裂缝分支(小概率)
+            if random.random() < 0.3:
+                branch_start = crack_start + random.randint(crack_height // 4, 3 * crack_height // 4)
+                branch_length = random.randint(3, 7)
+                branch_angle = random.choice([-1, 1]) * random.uniform(0.5, 1.5)
+                branch_end = (
+                    crack_x + branch_length * math.cos(branch_angle),
+                    branch_start + branch_length * math.sin(branch_angle)
+                )
+                pygame.draw.line(surface, COLOR_FLOOR_CRACK,
+                                 (crack_x, branch_start), branch_end, 1)
+
+        # 额外的小裂缝 (如果存在)
+        if style.get('extra_cracks', 0) > 0:
+            for _ in range(style['extra_cracks']):
+                start_x = rect.left + random.randint(3, TILE_SIZE - 3)
+                start_y = rect.top + random.randint(3, TILE_SIZE - 3)
+                length = random.randint(3, 8)
+                angle = random.uniform(0, 2 * math.pi)
+                end_x = start_x + length * math.cos(angle)
+                end_y = start_y + length * math.sin(angle)
+
                 pygame.draw.line(surface, COLOR_FLOOR_CRACK,
                                  (start_x, start_y), (end_x, end_y), 1)
-        else:
-            style = self.tile_styles[y][x]
-            pygame.draw.rect(surface, COLOR_FLOOR, rect)
 
-            # 水平裂缝
-            if style['crack_h']:
-                pygame.draw.line(surface, COLOR_FLOOR_CRACK,
-                                 (rect.left + 2, rect.centery),
-                                 (rect.right - 2, rect.centery), 1)
+        # 污渍 (更自然的形状)
+        if style['stain_pos']:
+            sx, sy = style['stain_pos']
+            stain_color = (base_color[0] - 20, base_color[1] - 20, base_color[2] - 20, 40)
+            stain_size = random.randint(4, 8)
+            stain_surf = pygame.Surface((stain_size * 2, stain_size * 2), pygame.SRCALPHA)
 
-            # 垂直裂缝
-            if style['crack_v']:
-                pygame.draw.line(surface, COLOR_FLOOR_CRACK,
-                                 (rect.centerx, rect.top + 2),
-                                 (rect.centerx, rect.bottom - 2), 1)
+            # 生成不规则形状污渍
+            for i in range(random.randint(2, 4)):
+                angle = random.uniform(0, 2 * math.pi)
+                distance = random.uniform(0.3, 1.0) * stain_size
+                px = stain_size + distance * math.cos(angle)
+                py = stain_size + distance * math.sin(angle)
+                spot_size = random.randint(2, stain_size - 1)
+                pygame.draw.circle(stain_surf, stain_color, (px, py), spot_size)
 
-            # 污渍
-            if style['stain_pos']:
-                sx, sy = style['stain_pos']
-                pygame.draw.ellipse(surface, (175, 175, 175, 30),
-                                    (rect.left + sx, rect.top + sy, 6, 6))
+            surface.blit(stain_surf, (rect.left + sx, rect.top + sy))
 
-    # 右侧绘画怪物动态属性面板
+        # 青苔小块 (如果与青苔墙壁相邻)
+        if style.get('moss_patches', False):
+            moss_color = style.get('moss_color', (34, 139, 34))
+            for _ in range(random.randint(1, 3)):
+                moss_x = rect.left + random.randint(2, TILE_SIZE - 4)
+                moss_y = rect.top + random.randint(2, TILE_SIZE - 4)
+                moss_size = random.randint(2, 4)
+                moss_alpha = random.randint(30, 80)
+
+                moss_surface = pygame.Surface((moss_size * 2, moss_size * 2), pygame.SRCALPHA)
+                pygame.draw.circle(moss_surface, (*moss_color, moss_alpha),
+                                   (moss_size, moss_size), moss_size)
+                surface.blit(moss_surface, (moss_x, moss_y))
+
+        # 磨损模式 - 根据房间位置和行走路径添加磨损效果
+        if style.get('wear_pattern', 'none') != 'none':
+            wear_alpha = int(70 * style.get('dust_level', 0.3))
+            wear_color = (0, 0, 0, wear_alpha)
+
+            if style['wear_pattern'] == 'corner':
+                # 角落磨损
+                corner = random.choice(['tl', 'tr', 'bl', 'br'])
+                if corner == 'tl':
+                    wear_rect = pygame.Rect(rect.left, rect.top, TILE_SIZE // 3, TILE_SIZE // 3)
+                elif corner == 'tr':
+                    wear_rect = pygame.Rect(rect.right - TILE_SIZE // 3, rect.top, TILE_SIZE // 3, TILE_SIZE // 3)
+                elif corner == 'bl':
+                    wear_rect = pygame.Rect(rect.left, rect.bottom - TILE_SIZE // 3, TILE_SIZE // 3, TILE_SIZE // 3)
+                else:  # 'br'
+                    wear_rect = pygame.Rect(rect.right - TILE_SIZE // 3, rect.bottom - TILE_SIZE // 3, TILE_SIZE // 3,
+                                            TILE_SIZE // 3)
+
+                wear_surf = pygame.Surface((wear_rect.width, wear_rect.height), pygame.SRCALPHA)
+                pygame.draw.rect(wear_surf, wear_color, (0, 0, wear_rect.width, wear_rect.height))
+                surface.blit(wear_surf, wear_rect)
+
+            elif style['wear_pattern'] == 'center':
+                # 中央磨损 (人行走区域)
+                center_size = TILE_SIZE // 2
+                wear_rect = pygame.Rect(
+                    rect.centerx - center_size // 2,
+                    rect.centery - center_size // 2,
+                    center_size, center_size
+                )
+
+                wear_surf = pygame.Surface((center_size, center_size), pygame.SRCALPHA)
+                pygame.draw.ellipse(wear_surf, wear_color, (0, 0, center_size, center_size))
+                surface.blit(wear_surf, wear_rect)
+
+            elif style['wear_pattern'] == 'edge':
+                # 边缘磨损
+                edge = random.choice(['top', 'right', 'bottom', 'left'])
+                if edge == 'top':
+                    wear_rect = pygame.Rect(rect.left, rect.top, rect.width, TILE_SIZE // 3)
+                elif edge == 'right':
+                    wear_rect = pygame.Rect(rect.right - TILE_SIZE // 3, rect.top, TILE_SIZE // 3, rect.height)
+                elif edge == 'bottom':
+                    wear_rect = pygame.Rect(rect.left, rect.bottom - TILE_SIZE // 3, rect.width, TILE_SIZE // 3)
+                else:  # 'left'
+                    wear_rect = pygame.Rect(rect.left, rect.top, TILE_SIZE // 3, rect.height)
+
+                wear_surf = pygame.Surface((wear_rect.width, wear_rect.height), pygame.SRCALPHA)
+                pygame.draw.rect(wear_surf, wear_color, (0, 0, wear_rect.width, wear_rect.height))
+                surface.blit(wear_surf, wear_rect)
+
+        # 潮湿效果 (在角落或墙边)
+        if style.get('moisture', False):
+            moisture_alpha = random.randint(20, 40)
+            moisture_color = (0, 0, 100, moisture_alpha)  # 蓝色调潮湿
+
+            # 随机选择一个角落或边缘
+            position = random.choice(['tl', 'tr', 'bl', 'br', 'top', 'bottom', 'left', 'right'])
+
+            if position in ['tl', 'tr', 'bl', 'br']:  # 角落
+                if position == 'tl':
+                    moisture_rect = pygame.Rect(rect.left, rect.top, TILE_SIZE // 3, TILE_SIZE // 3)
+                elif position == 'tr':
+                    moisture_rect = pygame.Rect(rect.right - TILE_SIZE // 3, rect.top, TILE_SIZE // 3, TILE_SIZE // 3)
+                elif position == 'bl':
+                    moisture_rect = pygame.Rect(rect.left, rect.bottom - TILE_SIZE // 3, TILE_SIZE // 3, TILE_SIZE // 3)
+                else:  # 'br'
+                    moisture_rect = pygame.Rect(rect.right - TILE_SIZE // 3, rect.bottom - TILE_SIZE // 3,
+                                                TILE_SIZE // 3, TILE_SIZE // 3)
+
+                moisture_surf = pygame.Surface((moisture_rect.width, moisture_rect.height), pygame.SRCALPHA)
+                for _ in range(5):  # 创建多个小水滴以形成不规则形状
+                    drop_x = random.randint(0, moisture_rect.width)
+                    drop_y = random.randint(0, moisture_rect.height)
+                    drop_size = random.randint(2, 5)
+                    pygame.draw.circle(moisture_surf, moisture_color, (drop_x, drop_y), drop_size)
+
+                surface.blit(moisture_surf, moisture_rect)
+            else:  # 边缘
+                if position == 'top':
+                    moisture_rect = pygame.Rect(rect.left + rect.width // 4, rect.top, rect.width // 2, TILE_SIZE // 4)
+                elif position == 'right':
+                    moisture_rect = pygame.Rect(rect.right - TILE_SIZE // 4, rect.top + rect.height // 4,
+                                                TILE_SIZE // 4, rect.height // 2)
+                elif position == 'bottom':
+                    moisture_rect = pygame.Rect(rect.left + rect.width // 4, rect.bottom - TILE_SIZE // 4,
+                                                rect.width // 2, TILE_SIZE // 4)
+                else:  # 'left'
+                    moisture_rect = pygame.Rect(rect.left, rect.top + rect.height // 4, TILE_SIZE // 4,
+                                                rect.height // 2)
+
+                moisture_surf = pygame.Surface((moisture_rect.width, moisture_rect.height), pygame.SRCALPHA)
+                pygame.draw.rect(moisture_surf, moisture_color, (0, 0, moisture_rect.width, moisture_rect.height),
+                                 border_radius=3)
+                surface.blit(moisture_surf, moisture_rect)
+
+    def _draw_fountain_floor(self, rect, surface):
+        """绘制喷泉房间的地板 - 优化版"""
+        # 更丰富的大理石底色 - 使用微妙渐变
+        base_colors = [(90, 90, 110), (100, 100, 120), (110, 110, 130)]
+        base_color = random.choice(base_colors)
+        pygame.draw.rect(surface, base_color, rect)
+
+        # 创建有组织的大理石纹理网格
+        tile_div = 4  # 将地砖分成4x4的小网格
+        cell_size = TILE_SIZE // tile_div
+
+        # 绘制网格线 - 更精细的大理石纹路
+        for i in range(1, tile_div):
+            # 水平线
+            line_y = rect.top + i * cell_size
+            line_color = (180, 180, 200, 30)  # 更淡的线条
+            pygame.draw.line(surface, line_color,
+                             (rect.left, line_y), (rect.right, line_y), 1)
+
+            # 垂直线
+            line_x = rect.left + i * cell_size
+            pygame.draw.line(surface, line_color,
+                             (line_x, rect.top), (line_x, rect.bottom), 1)
+
+        # 添加细致的大理石纹理
+        for i in range(tile_div):
+            for j in range(tile_div):
+                # 每个小网格内添加随机的大理石纹理
+                if random.random() < 0.7:  # 70%的小格子有纹理
+                    cell_x = rect.left + j * cell_size
+                    cell_y = rect.top + i * cell_size
+
+                    # 随机选择纹理类型
+                    texture_type = random.choice(['vein', 'spot', 'wave'])
+
+                    if texture_type == 'vein':
+                        # 大理石脉络
+                        vein_start = (cell_x + random.randint(1, cell_size - 1),
+                                      cell_y + random.randint(1, cell_size - 1))
+                        vein_length = random.randint(3, cell_size - 1)
+                        vein_angle = random.uniform(0, 2 * math.pi)
+                        vein_end_x = vein_start[0] + vein_length * math.cos(vein_angle)
+                        vein_end_y = vein_start[1] + vein_length * math.sin(vein_angle)
+
+                        vein_color = (200, 200, 220, 40)
+                        pygame.draw.line(surface, vein_color, vein_start,
+                                         (vein_end_x, vein_end_y), 1)
+
+                    elif texture_type == 'spot':
+                        # 大理石斑点
+                        spot_x = cell_x + cell_size // 2
+                        spot_y = cell_y + cell_size // 2
+                        spot_size = random.randint(1, 3)
+                        spot_color = (200, 200, 220, 30)
+
+                        pygame.draw.circle(surface, spot_color,
+                                           (spot_x, spot_y), spot_size)
+
+                    else:  # 'wave'
+                        # 波浪纹路
+                        wave_points = []
+                        wave_y_base = cell_y + cell_size // 2
+                        for w in range(0, cell_size + 1, 2):
+                            wave_x = cell_x + w
+                            wave_y = wave_y_base + random.randint(-1, 1)
+                            wave_points.append((wave_x, wave_y))
+
+                        if len(wave_points) >= 2:
+                            wave_color = (200, 200, 220, 20)
+                            pygame.draw.lines(surface, wave_color, False, wave_points, 1)
+
+        # 更精致的裂缝网络 - 主裂缝和支裂缝
+        # 主裂缝 - 更有规律
+        if random.random() < 0.8:  # 80%的地砖有主裂缝
+            crack_dir = random.choice(['h', 'v', 'diag'])
+            crack_color = (80, 80, 100, 80)
+
+            if crack_dir == 'h':
+                # 水平裂缝
+                crack_y = rect.top + random.randint(TILE_SIZE // 3, 2 * TILE_SIZE // 3)
+                # 稍微不规则的水平线
+                crack_points = []
+                for x in range(rect.left, rect.right + 1, 2):
+                    y_var = random.randint(-1, 1)
+                    crack_points.append((x, crack_y + y_var))
+
+                if len(crack_points) >= 2:
+                    pygame.draw.lines(surface, crack_color, False, crack_points, 1)
+
+            elif crack_dir == 'v':
+                # 垂直裂缝
+                crack_x = rect.left + random.randint(TILE_SIZE // 3, 2 * TILE_SIZE // 3)
+                # 稍微不规则的垂直线
+                crack_points = []
+                for y in range(rect.top, rect.bottom + 1, 2):
+                    x_var = random.randint(-1, 1)
+                    crack_points.append((crack_x + x_var, y))
+
+                if len(crack_points) >= 2:
+                    pygame.draw.lines(surface, crack_color, False, crack_points, 1)
+
+            else:  # 'diag'
+                # 对角线裂缝
+                start_corner = random.choice(['tl', 'tr', 'bl', 'br'])
+                if start_corner == 'tl':
+                    start, end = (rect.left, rect.top), (rect.right, rect.bottom)
+                elif start_corner == 'tr':
+                    start, end = (rect.right, rect.top), (rect.left, rect.bottom)
+                elif start_corner == 'bl':
+                    start, end = (rect.left, rect.bottom), (rect.right, rect.top)
+                else:  # 'br'
+                    start, end = (rect.right, rect.bottom), (rect.left, rect.top)
+
+                # 稍微不规则的对角线
+                crack_points = []
+                steps = TILE_SIZE // 2
+                for i in range(steps + 1):
+                    t = i / steps
+                    x = int(start[0] + (end[0] - start[0]) * t)
+                    y = int(start[1] + (end[1] - start[1]) * t)
+                    var = random.randint(-1, 1)
+                    if start_corner in ['tl', 'br']:
+                        crack_points.append((x + var, y + var))
+                    else:
+                        crack_points.append((x + var, y - var))
+
+                pygame.draw.lines(surface, crack_color, False, crack_points, 1)
+
+            # 添加微小的支裂缝
+            if random.random() < 0.5:  # 50%概率添加支裂缝
+                branch_count = random.randint(1, 2)
+                for _ in range(branch_count):
+                    if len(crack_points) > 2:
+                        # 从主裂缝上随机选一点作为分支起点
+                        branch_idx = random.randint(1, len(crack_points) - 2)
+                        branch_start = crack_points[branch_idx]
+
+                        # 分支属性
+                        branch_length = random.randint(3, 5)
+                        branch_angle = random.uniform(0, 2 * math.pi)
+                        branch_end = (
+                            branch_start[0] + branch_length * math.cos(branch_angle),
+                            branch_start[1] + branch_length * math.sin(branch_angle)
+                        )
+
+                        # 绘制分支
+                        branch_color = (80, 80, 100, 60)  # 略淡于主裂缝
+                        pygame.draw.line(surface, branch_color,
+                                         branch_start, branch_end, 1)
+
+    def _draw_lava_floor(self, rect, surface):
+        anim_time = pygame.time.get_ticks()
+
+        # 为每个地板格子提供唯一且固定的随机种子
+        tile_x, tile_y = rect.x // TILE_SIZE, rect.y // TILE_SIZE
+        tile_seed = hash((tile_x, tile_y, self.floor))
+
+        # 岩浆基底颜色动态变化 - 使用anim_time确保动画流畅
+        lava_color = (
+            200 + int(55 * math.sin(anim_time / 300)),
+            80 + int(40 * math.cos(anim_time / 400)),
+            0,
+            200
+        )
+        pygame.draw.rect(surface, lava_color, rect)
+
+        # 岩浆流动纹理 - 基于固定随机种子
+        random.seed(tile_seed)
+        flow_seeds = [(random.randint(2, TILE_SIZE - 2), random.randint(0, 39)) for _ in range(8)]
+        random.seed()  # 重置随机种子
+
+        # 使用固定起点，但动态偏移
+        for i, (base_x, offset) in enumerate(flow_seeds):
+            flow_x = rect.left + base_x
+            flow_y = rect.top + ((anim_time // 30 + offset) % (TILE_SIZE + 40))
+            pygame.draw.line(surface, (255, 140, 0),
+                             (flow_x, flow_y - 5), (flow_x, flow_y + 5), 3)
+
+        # 随机气泡 - 基于时间和位置的伪随机
+        bubble_chance = (anim_time // 100 + tile_x * 17 + tile_y * 23) % 100
+        if bubble_chance < 10:  # 10%概率出现气泡
+            # 对每个瓦片使用固定的气泡位置，但随时间变化
+            random.seed(tile_seed + (anim_time // 500))  # 每500ms变化一次
+            bubble_x = rect.left + random.randint(5, TILE_SIZE - 5)
+            bubble_y = rect.top + random.randint(5, TILE_SIZE - 5)
+            bubble_size = random.randint(2, 4)
+            random.seed()  # 重置随机种子
+
+            # 气泡内部
+            pygame.draw.circle(surface, (255, 200, 50),
+                               (bubble_x, bubble_y), bubble_size)
+            # 气泡高光
+            pygame.draw.circle(surface, (255, 255, 200),
+                               (bubble_x - 1, bubble_y - 1), bubble_size // 2)
+
+        # 岩浆边缘结壳效果 - 基于瓦片的固定位置
+        # 每个瓦片最多3个结壳点，位置固定
+        random.seed(tile_seed)
+        num_crusts = random.randint(0, 3)
+        crust_positions = []
+
+        for _ in range(num_crusts):
+            crust_x = rect.left + random.randint(2, TILE_SIZE - 5)
+            crust_y = rect.top + random.randint(2, TILE_SIZE - 5)
+            crust_size = random.randint(4, 8)
+            crack_offset_x = random.randint(-3, 3)
+            crack_offset_y = random.randint(-3, 3)
+            crust_positions.append((crust_x, crust_y, crust_size, crack_offset_x, crack_offset_y))
+
+        random.seed()  # 重置随机种子
+
+        # 绘制结壳，使其随时间略微变化但保持位置
+        for crust_x, crust_y, crust_size, crack_dx, crack_dy in crust_positions:
+            # 结壳颜色随时间轻微变化
+            brightness = int(20 * math.sin(anim_time / 1000))
+            crust_color = (100 + brightness, 40 + brightness // 2, 0)
+            pygame.draw.rect(surface, crust_color,
+                             (crust_x, crust_y, crust_size, crust_size), 1)
+
+            # 裂纹
+            crack_x = crust_x + crust_size // 2
+            crack_y = crust_y + crust_size // 2
+            # 裂纹位置保持固定，但可能随时间轻微变化
+            pygame.draw.line(surface, (150, 50, 0),
+                             (crack_x, crack_y), (crack_x + crack_dx, crack_y + crack_dy), 1)
+
+    def _draw_hell_floor(self, rect, surface):
+        """绘制地狱地板 - 修复随机性问题"""
+        # 为每个地板格子提供唯一且固定的随机种子
+        tile_x, tile_y = rect.x // TILE_SIZE, rect.y // TILE_SIZE
+        tile_seed = hash((tile_x, tile_y, self.floor))
+        anim_time = pygame.time.get_ticks()
+
+        # 焦黑基底 - 更暗淡的色调
+        base_color = (60, 30, 30)
+        pygame.draw.rect(surface, base_color, rect)
+
+        # 灰烬效果 - 固定的随机斑点
+        random.seed(tile_seed)
+        ash_positions = [(
+            rect.left + random.randint(2, TILE_SIZE - 2),
+            rect.top + random.randint(2, TILE_SIZE - 2),
+            random.randint(1, 3),
+            (40 + random.randint(0, 20), 20 + random.randint(0, 10), 20 + random.randint(0, 10))
+        ) for _ in range(5)]
+        random.seed()  # 重置随机种子
+
+        # 绘制灰烬
+        for ash_x, ash_y, ash_size, ash_color in ash_positions:
+            pygame.draw.circle(surface, ash_color, (ash_x, ash_y), ash_size)
+
+        # 裂纹 - 固定位置
+        random.seed(tile_seed + 1)  # 不同的种子以产生不同的裂纹模式
+        crack_positions = [(
+            rect.left + random.randint(2, TILE_SIZE - 2),
+            rect.top + random.randint(2, TILE_SIZE - 2),
+            random.randint(-8, 8),
+            random.randint(-8, 8)
+        ) for _ in range(3)]
+        random.seed()  # 重置随机种子
+
+        # 绘制裂纹
+        for start_x, start_y, dx, dy in crack_positions:
+            pygame.draw.line(surface, (80, 40, 40),
+                             (start_x, start_y), (start_x + dx, start_y + dy), 2)
+
+        # 随机火焰 - 只在特定瓦片上出现，位置固定
+        # 但动画效果随时间变化
+        random.seed(tile_seed)
+        has_flame = random.random() < 0.2  # 20%概率有火焰
+        flame_base_x = rect.centerx + random.randint(-2, 2)
+        flame_h = random.randint(8, 15)
+        flame_w = random.randint(6, 10)
+        random.seed()  # 重置随机种子
+
+        if has_flame:
+            # 火焰位置轻微抖动，但基于固定位置
+            flame_x = flame_base_x + int(2 * math.sin(anim_time / 100))
+
+            # 火焰高度随时间变化，使其看起来在燃烧
+            current_height = flame_h * (0.7 + 0.3 * math.sin(anim_time / 200))
+
+            # 火焰形状 - 稍微抖动但基本固定
+            flame_points = [
+                (flame_x, rect.bottom - current_height),
+                (flame_x - flame_w // 2, rect.bottom - current_height // 2),
+                (flame_x - flame_w // 3, rect.bottom - current_height // 3),
+                (flame_x + flame_w // 3, rect.bottom - current_height // 3),
+                (flame_x + flame_w // 2, rect.bottom - current_height // 2)
+            ]
+
+            # 火焰颜色 - 由内到外渐变，并随时间变化
+            inner_brightness = 200 + int(55 * math.sin(anim_time / 150))
+            inner_color = (255, inner_brightness, 0)  # 内部明亮颜色
+            outer_color = (139, 0, 0)  # 外部暗红色
+
+            # 绘制外部火焰
+            pygame.draw.polygon(surface, outer_color, flame_points)
+
+            # 内部火焰 - 稍小，并且颜色更加活跃
+            inner_points = []
+            for i, point in enumerate(flame_points):
+                inner_x = flame_x + (point[0] - flame_x) * 0.7
+                inner_y = rect.bottom - (rect.bottom - point[1]) * 0.7
+                inner_points.append((inner_x, inner_y))
+
+            pygame.draw.polygon(surface, inner_color, inner_points)
+
+            # 火焰中心 - 最亮，随时间闪烁
+            center_brightness = 150 + int(105 * math.sin(anim_time / 100))
+            center_x = flame_x
+            center_y = rect.bottom - current_height * 0.6
+            pygame.draw.circle(surface, (255, center_brightness, 0),
+                               (int(center_x), int(center_y)), 2)
+
+    def _is_in_fountain_room(self, x, y):
+        """检查位置是否在喷泉房间内"""
+        if not self.fountain_room:
+            return False
+        fr = self.fountain_room
+        return (fr['x1'] <= x < fr['x2'] and fr['y1'] <= y < fr['y2'])
+
+    def _is_near_fountain_center(self, x, y):
+        """检查位置是否靠近喷泉中心"""
+        if not self.fountain_room:
+            return False
+        center = self.fountain_room['center']
+        return abs(x - center[0]) <= 1 and abs(y - center[1]) <= 1
+
+    def _is_in_lava_room(self, x, y):
+        """检查位置是否在岩浆房间内"""
+        if not self.lava_room:
+            return False
+        lr = self.lava_room
+        return (lr['x1'] <= x < lr['x2'] and lr['y1'] <= y < lr['y2'])
+
+    # ----------------------- 右侧绘画怪物动态属性面板 -----------------------
     def draw_side_panel(self):
         panel = self.side_panel
         panel.fill((30, 30, 40))  # 深蓝灰底色
@@ -8480,7 +11664,7 @@ class Game:
                 self.draw_fire_lord(monster)
 
             elif "神圣灾祸骑士" in monster.name:
-                self.draw_holy_knight(monster)
+                self.draw_holy_knight(monster, holy_ball_count= monster.num_balls)
                 continue
 
             # 默认怪物造型（史莱姆等）
