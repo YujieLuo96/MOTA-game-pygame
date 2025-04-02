@@ -150,7 +150,8 @@ monsters_data = [
 ]
 
 # 道具类型
-ITEM_TYPES = ["CHEST", "HP_SMALL", "HP_LARGE", "ATK_GEM", "DEF_GEM"]
+ITEM_TYPES = ["CHEST", "HP_SMALL", "HP_LARGE", "MP_SMALL", "MP_LARGE", "ATK_GEM", "DEF_GEM", "ATK_GEM_LARGE", "DEF_GEM_LARGE"]
+
 
 EQUIPMENT_TYPES = {
     # 武器列表
@@ -316,6 +317,441 @@ EQUIPMENT_TYPES = {
 
 
 # -------- UI类 --------
+
+
+class Encyclopedia:
+    def __init__(self, screen, game):
+        self.screen = screen
+        self.game = game
+        self.screen_width, self.screen_height = screen.get_size()
+
+        # 获取全局常量
+        global TILE_SIZE, MAP_WIDTH, MAP_HEIGHT
+        self.TILE_SIZE = TILE_SIZE  # 直接存储为类属性
+        self.EQUIPMENT_TYPES = EQUIPMENT_TYPES  # 存储装备类型数据
+
+        # 图鉴页面设置 - 移除怪物页面
+        self.page = 0  # 0 = 物品页, 1 = 武器页, 2 = 防具页
+        self.max_pages = 3  # 减少为3页
+
+        # 加载字体
+        try:
+            self.title_font = pygame.font.SysFont("SimHei", 36, bold=True)
+            self.item_font = pygame.font.SysFont("SimHei", 20)
+            self.desc_font = pygame.font.SysFont("SimSun", 18)
+        except:
+            # 回退到默认字体
+            self.title_font = pygame.font.Font(None, 36)
+            self.item_font = pygame.font.Font(None, 20)
+            self.desc_font = pygame.font.Font(None, 18)
+
+        # 颜色设置
+        self.colors = {
+            'bg': (20, 20, 30, 230),  # 背景色带透明度
+            'border': (80, 80, 120),  # 边框色
+            'title': (255, 215, 0),  # 标题金色
+            'text': (220, 220, 220),  # 普通文本
+            'highlight': (100, 150, 255),  # 高亮文本
+            'button': (60, 60, 80),  # 按钮颜色
+            'button_hover': (80, 80, 120),  # 按钮悬停颜色
+            'item_bg': (40, 40, 60)  # 物品背景
+        }
+
+        # 网格设置
+        self.grid_size = 70  # 每个格子大小
+        self.grid_padding = 10  # 格子间隔
+        self.grid_cols = 8  # 每行显示数量
+        self.grid_rows = 4  # 每页行数
+
+        # 详细信息框
+        self.info_panel = {
+            'visible': False,
+            'item': None,
+            'type': None  # 'item', 'weapon', 'armor'
+        }
+
+        # 模拟一个物品实例用于展示
+        self.dummy_item = type('DummyItem', (), {'x': 0, 'y': 0, 'item_type': None, 'equipment_data': None})
+
+        # 页面按钮
+        self.buttons = self.create_buttons()
+
+        # 鼠标状态
+        self.hover_button = None
+        self.hover_item = None
+
+    def get_page_title(self):
+        """获取当前页面的标题"""
+        titles = ["消耗品图鉴", "武器图鉴", "防具图鉴"]
+        return titles[self.page]
+
+    def get_page_items(self):
+        """获取当前页面应该显示的物品列表"""
+        if self.page == 0:
+            # 消耗品页面: HP药水, 宝石等
+            return ["CHEST", "HP_SMALL", "HP_LARGE", "MP_SMALL", "MP_LARGE", "ATK_GEM", "DEF_GEM", "ATK_GEM_LARGE", "DEF_GEM_LARGE"]
+        elif self.page == 1:
+            # 武器页面
+            return [key for key, data in self.EQUIPMENT_TYPES.items()
+                    if data["type"] == "weapon"]
+        elif self.page == 2:
+            # 防具页面
+            return [key for key, data in self.EQUIPMENT_TYPES.items()
+                    if data["type"] == "armor"]
+
+    def draw_item_in_cell(self, item_id, x, y, rect):
+        # 设置物品坐标以便绘制
+        center_x = rect.centerx
+        center_y = rect.centery
+
+        # 将 dummy_item 放置在适当位置
+        self.dummy_item.x = center_x // self.TILE_SIZE
+        self.dummy_item.y = center_y // self.TILE_SIZE
+
+        if self.page == 0:  # 消耗品
+            self.dummy_item.item_type = item_id
+            self.dummy_item.equipment_data = None
+
+            # 计算绘制偏移，使物品居中显示
+            old_x, old_y = self.dummy_item.x, self.dummy_item.y
+            self.dummy_item.x = center_x // self.TILE_SIZE
+            self.dummy_item.y = center_y // self.TILE_SIZE
+
+            # 使用game的绘制函数
+            if item_id == "CHEST":
+                # 调用游戏的宝箱绘制函数
+                self.game.draw_chest(self.dummy_item)
+            elif "HP_" in item_id or "MP_" in item_id:
+                # 调用游戏的药水绘制函数
+                self.game.draw_potion(self.dummy_item)
+            elif "GEM" in item_id:
+                # 调用游戏的宝石绘制函数
+                self.game.draw_gem(self.dummy_item)
+
+            # 恢复原始坐标
+            self.dummy_item.x, self.dummy_item.y = old_x, old_y
+
+        else:  # 武器或防具
+            self.dummy_item.item_type = item_id
+            self.dummy_item.equipment_data = self.EQUIPMENT_TYPES[item_id].copy()
+
+            # 计算绘制偏移，使物品居中显示
+            old_x, old_y = self.dummy_item.x, self.dummy_item.y
+            self.dummy_item.x = center_x // self.TILE_SIZE
+            self.dummy_item.y = center_y // self.TILE_SIZE
+
+            # 使用game的绘制函数绘制装备
+            self.game.draw_equipment(self.dummy_item)
+
+            # 恢复原始坐标
+            self.dummy_item.x, self.dummy_item.y = old_x, old_y
+
+        # 在格子底部添加物品名称
+        if self.page == 0:
+            if item_id == "CHEST":
+                name = "宝箱"
+            elif item_id == "HP_SMALL":
+                name = "小红药水"
+            elif item_id == "HP_LARGE":
+                name = "大红药水"
+            elif item_id == "MP_SMALL":
+                name = "小蓝药水"
+            elif item_id == "MP_LARGE":
+                name = "大蓝药水"
+            elif item_id == "ATK_GEM":
+                name = "攻击宝石"
+            elif item_id == "DEF_GEM":
+                name = "防御宝石"
+            elif item_id == "ATK_GEM_LARGE":
+                name = "大攻击宝石"
+            elif item_id == "DEF_GEM_LARGE":
+                name = "大防御宝石"
+            else:
+                name = item_id
+        else:
+            name = self.dummy_item.equipment_data['name']
+
+        name_text = self.desc_font.render(name[:6] + ".." if len(name) > 6 else name,
+                                          True, self.colors['text'])
+        name_rect = name_text.get_rect(centerx=rect.centerx, bottom=rect.bottom - 2)
+        self.screen.blit(name_text, name_rect)
+
+    def draw_info_panel(self):
+        """绘制详细信息面板"""
+        if not self.info_panel['visible'] or not self.hover_item:
+            return
+
+        item_id = self.hover_item['id']
+
+        # 设置面板尺寸和位置
+        panel_width, panel_height = 300, 250
+        panel_x = max(50, min(self.screen_width - panel_width - 50,
+                              self.hover_item['rect'].right + 10))
+        panel_y = max(100, min(self.screen_height - panel_height - 50,
+                               self.hover_item['rect'].top))
+
+        # 绘制面板背景
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_width, panel_height)
+        pygame.draw.rect(self.screen, self.colors['bg'], panel_rect, border_radius=8)
+        pygame.draw.rect(self.screen, self.colors['border'], panel_rect, 2, border_radius=8)
+
+        # 绘制物品信息
+        self.draw_item_info(panel_rect, item_id)
+
+    def draw_item_info(self, rect, item_id):
+        """绘制物品详细信息"""
+        if self.page == 0:  # 消耗品
+            # 标题
+            if item_id == "CHEST":
+                title = "宝箱"
+                desc = ["打开后获得随机金币"]
+            elif item_id == "HP_SMALL":
+                title = "小生命药水"
+                desc = ["恢复少量生命值", "与楼层数相关"]
+            elif item_id == "HP_LARGE":
+                title = "大生命药水"
+                desc = ["恢复大量生命值", "与楼层数相关"]
+            elif item_id == "MP_SMALL":
+                title = "小魔法药水"
+                desc = ["恢复少量魔法值", "与楼层数相关"]
+            elif item_id == "MP_LARGE":
+                title = "大魔法药水"
+                desc = ["恢复大量魔法值", "与楼层数相关"]
+            elif item_id == "ATK_GEM":
+                title = "攻击宝石"
+                desc = ["提升攻击力", "与楼层数相关"]
+            elif item_id == "DEF_GEM":
+                title = "防御宝石"
+                desc = ["提升防御力", "与楼层数相关"]
+            elif item_id == "ATK_GEM_LARGE":
+                title = "大攻击宝石"
+                desc = ["大幅提升攻击力", "与楼层数相关"]
+            elif item_id == "DEF_GEM_LARGE":
+                title = "大防御宝石"
+                desc = ["大幅提升防御力", "与楼层数相关"]
+            else:
+                title = item_id
+                desc = ["未知物品"]
+        else:  # 武器或防具
+            equipment_data = self.EQUIPMENT_TYPES[item_id]
+            title = equipment_data['name']
+
+            if equipment_data['type'] == 'weapon':
+                desc = [
+                    f"类型: 武器",
+                    f"攻击力: +{equipment_data['atk']}",
+                    f"攻击倍率: x{equipment_data['multiple']}",
+                    f"攻击速度: {equipment_data['attack_speed']} 次/秒",
+                    f"攻击范围: {equipment_data['attack_range']} 格",
+                    f"耐久度: {equipment_data['durability']}"
+                ]
+            else:  # armor
+                desc = [
+                    f"类型: 防具",
+                    f"防御力: +{equipment_data['def']}",
+                    f"防御倍率: x{equipment_data['multiple']}",
+                    f"耐久度: {equipment_data['durability']}"
+                ]
+
+        # 绘制标题
+        title_text = self.item_font.render(title, True, self.colors['title'])
+        title_rect = title_text.get_rect(centerx=rect.centerx, top=rect.top + 10)
+        self.screen.blit(title_text, title_rect)
+
+        # 分隔线
+        pygame.draw.line(self.screen, self.colors['border'],
+                         (rect.left + 20, title_rect.bottom + 5),
+                         (rect.right - 20, title_rect.bottom + 5), 2)
+
+        # 绘制描述
+        y = title_rect.bottom + 20
+        for line in desc:
+            text = self.desc_font.render(line, True, self.colors['text'])
+            self.screen.blit(text, (rect.left + 30, y))
+            y += 25
+
+    def create_buttons(self):
+        """创建导航按钮"""
+        buttons = []
+
+        # 左右翻页按钮
+        btn_width, btn_height = 100, 40
+
+        # 上一页按钮
+        prev_btn = {
+            'rect': pygame.Rect(50, self.screen_height - 70, btn_width, btn_height),
+            'text': "上一页",
+            'action': self.prev_page,
+            'hover': False
+        }
+        buttons.append(prev_btn)
+
+        # 下一页按钮
+        next_btn = {
+            'rect': pygame.Rect(self.screen_width - 150, self.screen_height - 70, btn_width, btn_height),
+            'text': "下一页",
+            'action': self.next_page,
+            'hover': False
+        }
+        buttons.append(next_btn)
+
+        # 返回按钮
+        exit_btn = {
+            'rect': pygame.Rect(self.screen_width // 2 - 50, self.screen_height - 70, btn_width, btn_height),
+            'text': "关闭",
+            'action': self.close,
+            'hover': False
+        }
+        buttons.append(exit_btn)
+
+        return buttons
+
+    def prev_page(self):
+        """切换到上一页"""
+        self.page = (self.page - 1) % self.max_pages
+        self.info_panel['visible'] = False
+        return True
+
+    def next_page(self):
+        """切换到下一页"""
+        self.page = (self.page + 1) % self.max_pages
+        self.info_panel['visible'] = False
+        return True
+
+    def close(self):
+        """关闭图鉴"""
+        return False
+
+    def draw_buttons(self):
+        """绘制界面按钮"""
+        self.hover_button = None
+        mouse_pos = pygame.mouse.get_pos()
+
+        for btn in self.buttons:
+            # 检查悬停状态
+            btn['hover'] = btn['rect'].collidepoint(mouse_pos)
+            if btn['hover']:
+                self.hover_button = btn
+
+            # 绘制按钮
+            btn_color = self.colors['button_hover'] if btn['hover'] else self.colors['button']
+            pygame.draw.rect(self.screen, btn_color, btn['rect'], border_radius=5)
+            pygame.draw.rect(self.screen, self.colors['border'], btn['rect'], 2, border_radius=5)
+
+            # 文本
+            text = self.item_font.render(btn['text'], True, self.colors['text'])
+            text_rect = text.get_rect(center=btn['rect'].center)
+            self.screen.blit(text, text_rect)
+
+    def draw_item_grid(self, items):
+        """绘制物品网格"""
+        start_x = (self.screen_width - (self.grid_size + self.grid_padding) * self.grid_cols) // 2
+        start_y = 100  # 从顶部留出空间给标题
+
+        for i, item_id in enumerate(items):
+            row = i // self.grid_cols
+            col = i % self.grid_cols
+
+            if row >= self.grid_rows:
+                continue  # 超过当前页显示数量
+
+            # 计算格子位置
+            x = start_x + col * (self.grid_size + self.grid_padding)
+            y = start_y + row * (self.grid_size + self.grid_padding)
+
+            # 绘制格子背景
+            cell_rect = pygame.Rect(x, y, self.grid_size, self.grid_size)
+            hover = cell_rect.collidepoint(pygame.mouse.get_pos())
+
+            # 背景颜色根据悬停状态变化
+            bg_color = self.colors['button_hover'] if hover else self.colors['item_bg']
+            pygame.draw.rect(self.screen, bg_color, cell_rect, border_radius=5)
+            pygame.draw.rect(self.screen, self.colors['border'], cell_rect, 2, border_radius=5)
+
+            # 绘制物品
+            self.draw_item_in_cell(item_id, x, y, cell_rect)
+
+            # 存储悬停物品
+            if hover:
+                self.hover_item = {
+                    'id': item_id,
+                    'rect': cell_rect,
+                    'type': 'item'
+                }
+
+    def draw(self):
+        """绘制整个图鉴界面"""
+        # 半透明遮罩层
+        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        self.screen.blit(overlay, (0, 0))
+
+        # 主面板背景
+        panel_width, panel_height = self.screen_width - 100, self.screen_height - 100
+        panel_rect = pygame.Rect(50, 50, panel_width, panel_height)
+        pygame.draw.rect(self.screen, self.colors['bg'], panel_rect, border_radius=10)
+        pygame.draw.rect(self.screen, self.colors['border'], panel_rect, 3, border_radius=10)
+
+        # 标题
+        title_text = self.title_font.render(self.get_page_title(), True, self.colors['title'])
+        title_rect = title_text.get_rect(centerx=self.screen_width // 2, top=60)
+        self.screen.blit(title_text, title_rect)
+
+        # 绘制物品网格
+        self.hover_item = None
+        self.draw_item_grid(self.get_page_items())
+
+        # 绘制按钮
+        self.draw_buttons()
+
+        # 如果鼠标悬停在物品上，显示详细信息
+        if self.hover_item:
+            self.info_panel['visible'] = True
+            self.draw_info_panel()
+        else:
+            self.info_panel['visible'] = False
+
+        # 页码指示器
+        page_text = self.desc_font.render(f"{self.page + 1}/{self.max_pages}", True, self.colors['text'])
+        page_rect = page_text.get_rect(centerx=self.screen_width // 2, bottom=self.screen_height - 30)
+        self.screen.blit(page_text, page_rect)
+
+        pygame.display.flip()
+
+    def handle_event(self, event):
+        """处理事件"""
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # 点击按钮
+            if self.hover_button:
+                return self.hover_button['action']()
+
+        return True  # 继续运行图鉴界面
+
+    def run(self):
+        """运行图鉴界面"""
+        running = True
+        clock = pygame.time.Clock()
+
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE or event.key == pygame.K_n:
+                        return  # 关闭图鉴
+                else:
+                    # 其他事件处理
+                    result = self.handle_event(event)
+                    if result is False:
+                        return
+
+            # 绘制界面
+            self.draw()
+
+            # 控制帧率
+            clock.tick(60)
+
 
 class SettingsMenu:
     def __init__(self, screen):
@@ -720,7 +1156,6 @@ class SettingsMenu:
         pygame.display.flip()
 
     def update(self, dt):
-        """更新动画和状态"""
         self.animation_time += dt
 
         # 更新按钮悬停状态
@@ -845,7 +1280,6 @@ class SettingsMenu:
 
             # 绘制界面
             self.draw()
-
 
 class MainMenu:
     def __init__(self, screen):
@@ -1531,6 +1965,218 @@ class DeathScreen:
 
         return button_rect
 
+# ---------------- 物品生成系统 ---------------
+
+
+class ItemProbabilitySystem:
+    def __init__(self, game):
+        self.game = game
+
+        # 基础物品权重 - 将作为基准值
+        self.base_weights = {
+            "CHEST": 10,  # 宝箱
+            "HP_SMALL": 15,  # 小红药
+            "HP_LARGE": 5,  # 大红药
+            "MP_SMALL": 15,  # 小蓝药
+            "MP_LARGE": 5,  # 大蓝药
+            "ATK_GEM": 10,  # 攻击宝石
+            "DEF_GEM": 10,  # 防御宝石
+            "ATK_GEM_LARGE": 3,  # 大攻击宝石
+            "DEF_GEM_LARGE": 3  # 大防御宝石
+        }
+
+        # 物品稀有度分类
+        self.rarity_tiers = {
+            "普通": ["CHEST", "HP_SMALL", "MP_SMALL"],
+            "稀有": ["ATK_GEM", "DEF_GEM"],
+            "罕见": ["HP_LARGE", "MP_LARGE"],
+            "珍贵": ["ATK_GEM_LARGE", "DEF_GEM_LARGE"]
+        }
+
+        # 稀有度显示颜色
+        self.rarity_colors = {
+            "普通": (200, 200, 200),  # 白色
+            "稀有": (30, 144, 255),  # 蓝色
+            "罕见": (148, 0, 211),  # 紫色
+            "珍贵": (255, 165, 0)  # 橙色
+        }
+
+        # 初始化玩家的幸运值
+        self.player_luck = 0
+
+        # 上次稀有物品掉落记录（防止连续掉落太多低级物品）
+        self.pity_counter = 0
+        self.pity_threshold = 15  # 连续15次没有稀有物品后，提高稀有物品概率
+
+        # 当前楼层特殊加成
+        self.floor_bonus = {}
+
+    def get_item_rarity(self, item_type):
+        """根据物品类型获取其稀有度"""
+        for rarity, items in self.rarity_tiers.items():
+            if item_type in items:
+                return rarity
+        return "普通"  # 默认为普通
+
+    def get_rarity_color(self, rarity):
+        return self.rarity_colors.get(rarity, (255, 255, 255))
+
+    def update_floor_bonus(self, floor):
+        # 基础修正
+        self.floor_bonus = {
+            "CHEST": 1.0 + floor * 0.05,  # 金币随楼层略微增加
+            "HP_SMALL": 1.0,  # 保持不变
+            "HP_LARGE": 0.5 + floor * 0.1,  # 大红药随楼层明显增加
+            "MP_SMALL": 1.0,  # 保持不变
+            "MP_LARGE": 0.5 + floor * 0.1,  # 大蓝药随楼层明显增加
+            "ATK_GEM": 0.8 + floor * 0.07,  # 攻击宝石随楼层增加
+            "DEF_GEM": 0.8 + floor * 0.07,  # 防御宝石随楼层增加
+            "ATK_GEM_LARGE": 0.1 + floor * 0.15,  # 大攻击宝石随楼层大幅增加
+            "DEF_GEM_LARGE": 0.1 + floor * 0.15  # 大防御宝石随楼层大幅增加
+        }
+
+        # 特殊楼层修正
+        if floor % 10 == 0:  # 每10层为BOSS层，提高稀有物品概率
+            for item in self.rarity_tiers["珍贵"]:
+                self.floor_bonus[item] *= 2.0
+
+        # 为确保不同楼层有不同的偏好
+        if floor % 3 == 0:  # 每3层偏好攻击类物品
+            self.floor_bonus["ATK_GEM"] *= 1.5
+            self.floor_bonus["ATK_GEM_LARGE"] *= 1.3
+        elif floor % 3 == 1:  # 每3层偏好防御类物品
+            self.floor_bonus["DEF_GEM"] *= 1.5
+            self.floor_bonus["DEF_GEM_LARGE"] *= 1.3
+        else:  # 偏好恢复类物品
+            self.floor_bonus["HP_LARGE"] *= 1.5
+            self.floor_bonus["MP_LARGE"] *= 1.5
+
+    def update_player_needs(self, player):
+        """根据玩家当前状态更新物品需求值"""
+        player_needs = {}
+
+        # 根据生命值状态调整药水权重
+        hp_ratio = player.hp / player.max_hp
+        if hp_ratio < 0.3:  # 生命值危急
+            player_needs["HP_SMALL"] = 2.0
+            player_needs["HP_LARGE"] = 2.5
+        elif hp_ratio < 0.6:  # 生命值较低
+            player_needs["HP_SMALL"] = 1.5
+            player_needs["HP_LARGE"] = 1.8
+        else:  # 生命值充足
+            player_needs["HP_SMALL"] = 1.0
+            player_needs["HP_LARGE"] = 1.0
+
+        # 根据魔法值状态调整药水权重
+        mp_ratio = player.mp / player.max_mp
+        if mp_ratio < 0.3:  # 魔法值危急
+            player_needs["MP_SMALL"] = 2.0
+            player_needs["MP_LARGE"] = 2.5
+        elif mp_ratio < 0.6:  # 魔法值较低
+            player_needs["MP_SMALL"] = 1.5
+            player_needs["MP_LARGE"] = 1.8
+        else:  # 魔法值充足
+            player_needs["MP_SMALL"] = 1.0
+            player_needs["MP_LARGE"] = 1.0
+
+        # 根据战斗能力调整属性宝石权重
+        effective_atk = player.atk / (self.game.floor * 50)  # 根据当前楼层估算合理攻击力
+        effective_def = player.defense / (self.game.floor * 50)  # 根据当前楼层估算合理防御力
+
+        if effective_atk < 0.8:  # 攻击力不足
+            player_needs["ATK_GEM"] = 1.8
+            player_needs["ATK_GEM_LARGE"] = 2.0
+        else:
+            player_needs["ATK_GEM"] = 1.0
+            player_needs["ATK_GEM_LARGE"] = 1.0
+
+        if effective_def < 0.8:  # 防御力不足
+            player_needs["DEF_GEM"] = 1.8
+            player_needs["DEF_GEM_LARGE"] = 2.0
+        else:
+            player_needs["DEF_GEM"] = 1.0
+            player_needs["DEF_GEM_LARGE"] = 1.0
+
+        return player_needs
+
+    def calculate_drop_weights(self):
+        player_needs = self.update_player_needs(self.game.player)
+
+        final_weights = {}
+        for item_type, base_weight in self.base_weights.items():
+            # 组合各种修正因子
+            weight = base_weight
+
+            # 楼层修正
+            if item_type in self.floor_bonus:
+                weight *= self.floor_bonus[item_type]
+
+            # 玩家需求修正
+            if item_type in player_needs:
+                weight *= player_needs[item_type]
+
+            # 幸运值修正
+            if self.get_item_rarity(item_type) in ["罕见", "珍贵"]:
+                weight *= (1.0 + self.player_luck * 0.1)
+
+            # 保底机制修正
+            if self.get_item_rarity(item_type) in ["罕见", "珍贵"] and self.pity_counter > self.pity_threshold:
+                pity_bonus = (self.pity_counter - self.pity_threshold) * 0.15
+                weight *= (1.0 + pity_bonus)
+
+            final_weights[item_type] = max(0.1, weight)  # 确保权重最小为0.1
+
+        return final_weights
+
+    def generate_random_item(self, x, y):
+        """生成一个随机物品"""
+        weights = self.calculate_drop_weights()
+
+        # 将权重转换为可用于random.choices的格式
+        items = list(weights.keys())
+        weight_values = list(weights.values())
+
+        # 选择一个物品类型
+        item_type = random.choices(items, weights=weight_values, k=1)[0]
+
+        # 获取物品稀有度
+        rarity = self.get_item_rarity(item_type)
+
+        # 更新保底计数器
+        if rarity in ["罕见", "珍贵"]:
+            self.pity_counter = 0  # 重置保底计数器
+            # 在游戏消息中显示稀有物品生成
+            rarity_color_name = self._get_color_name(self.get_rarity_color(rarity))
+            self.game.add_message(f"{rarity_color_name}{rarity}物品：{self._get_item_name(item_type)}！")
+        else:
+            self.pity_counter += 1  # 增加保底计数器
+
+        return Item(x, y, item_type)
+
+    def _get_color_name(self, color_tuple):
+        """将颜色元组转换为可读的颜色名称（用于文本消息）"""
+        colors = {
+            (200, 200, 200): "白色",
+            (30, 144, 255): "蓝色",
+            (148, 0, 211): "紫色",
+            (255, 165, 0): "橙色"
+        }
+        return colors.get(color_tuple, "")
+
+    def _get_item_name(self, item_type):
+        """根据物品类型获取可读的物品名称"""
+        item_names = {
+            "CHEST": "宝箱",
+            "HP_SMALL": "小型生命药水",
+            "HP_LARGE": "大型生命药水",
+            "MP_SMALL": "小型魔法药水",
+            "MP_LARGE": "大型魔法药水",
+            "ATK_GEM": "攻击宝石",
+            "DEF_GEM": "防御宝石",
+            "ATK_GEM_LARGE": "高级攻击宝石",
+            "DEF_GEM_LARGE": "高级防御宝石"
+        }
+        return item_names.get(item_type, item_type)
 
 # ----------------- 玩家类 -------------------
 
@@ -1540,8 +2186,10 @@ class Player:
         self.y = y
         self.hp = 1000
         self.max_hp = 1000000
-        self.base_atk = 25000  # 基础攻击力
-        self.base_defense = 250000  # 基础防御力
+        self.mp = 50  # Initial magic points
+        self.max_mp = 500000  # Maximum magic points
+        self.base_atk = 25  # 基础攻击力
+        self.base_defense = 25  # 基础防御力
         self.base_attack_speed = 1.0  # 基础攻击速度
         self.base_attack_range = 1   # 基础攻击范围
         self.attack_cooldown = 0
@@ -1557,7 +2205,8 @@ class Player:
                 'radius': 2,
                 'damage_multiple': 2.2,
                 'effect': FireStrikeEffect,
-                'key': pygame.K_f
+                'key': pygame.K_f,
+                'mp_cost': 60  # Added MP cost
             },
             'LightningEffect': {
                 'name': "闪电链",
@@ -1567,7 +2216,8 @@ class Player:
                 'max_targets': 3,
                 'damage_multiple': 1.8,
                 'effect': LightningEffect,
-                'key': pygame.K_e
+                'key': pygame.K_e,
+                'mp_cost': 40  # Added MP cost
             },
             'HolyBallEffect': {
                 'name': "神圣球",
@@ -1577,7 +2227,8 @@ class Player:
                 'ball_count': 6,
                 'damage_multiple': 2.5,
                 'effect': HolyBallEffect,
-                'key': pygame.K_c
+                'key': pygame.K_c,
+                'mp_cost': 100  # Added MP cost
             },
             'TripleAttack': {
                 'name': "三连斩",
@@ -1586,7 +2237,8 @@ class Player:
                 'range': 2,
                 'damage_multipliers': [0.8, 1.0, 1.5],  # 三连斩伤害系数
                 'effect': TripleAttack,
-                'key': pygame.K_q
+                'key': pygame.K_q,
+                'mp_cost': 60  # Added MP cost
             },
             'SummonLightningBall': {
                 'name': "守护闪电球阵",
@@ -1598,7 +2250,8 @@ class Player:
                 'attack_speed': 1.0,  # 每秒攻击1次
                 'damage_multiple': 1.0,  # 伤害为玩家攻击力的1倍
                 'effect': SummonLightningBall,
-                'key': pygame.K_z
+                'key': pygame.K_z,
+                'mp_cost': 150  # Added MP cost
             },
             'SummonHolyBall': {
                 'name': "神圣光环",
@@ -1611,7 +2264,8 @@ class Player:
                 'damage_multiple': 1.2,  # 1.2x player's attack damage
                 'heal_percent': 0.05,  # Heal 5% of max HP per second
                 'effect': SummonHolyBall,
-                'key': pygame.K_x
+                'key': pygame.K_x,
+                'mp_cost': 200  # Added MP cost
             }
         }
 
@@ -1709,7 +2363,6 @@ class Monster:
 
 # ---------------- 游戏商店 ----------------------
 
-
 class DungeonShop:
     def __init__(self, screen, player, floor):
         """
@@ -1727,23 +2380,23 @@ class DungeonShop:
 
         # 商店窗口参数 - 调整窗口大小，为文字提供更多空间
         self.window_width = 700
-        self.window_height = 530
+        self.window_height = 570  # 增加高度，为更多物品提供空间
         self.window_x = (self.screen_width - self.window_width) // 2
         self.window_y = (self.screen_height - self.window_height) // 2
 
         # 字体和颜色 - 使用支持中文的字体
         try:
             # 尝试使用系统中文字体，调整字体大小
-            self.title_font = pygame.font.SysFont("SimHei", 40, bold=True)  # 黑体标题
-            self.item_font = pygame.font.SysFont("SimSun", 24)  # 宋体项目
-            self.info_font = pygame.font.SysFont("SimSun", 20)  # 宋体描述
-            self.price_font = pygame.font.SysFont("SimSun", 22, bold=True)  # 价格专用字体
+            self.title_font = pygame.font.SysFont("SimHei", 38, bold=True)  # 黑体标题
+            self.item_font = pygame.font.SysFont("SimSun", 22)  # 宋体项目
+            self.info_font = pygame.font.SysFont("SimSun", 18)  # 宋体描述，减小字体
+            self.price_font = pygame.font.SysFont("SimSun", 20, bold=True)  # 价格专用字体，减小字体
         except:
             # 回退到默认字体
-            self.title_font = pygame.font.Font(None, 48)
-            self.item_font = pygame.font.Font(None, 32)
-            self.info_font = pygame.font.Font(None, 28)
-            self.price_font = pygame.font.Font(None, 30)
+            self.title_font = pygame.font.Font(None, 46)
+            self.item_font = pygame.font.Font(None, 30)
+            self.info_font = pygame.font.Font(None, 26)
+            self.price_font = pygame.font.Font(None, 28)
 
             # 颜色定义
         self.COLOR_BG = (30, 30, 40, 220)  # 增加不透明度
@@ -1759,10 +2412,10 @@ class DungeonShop:
         self.COLOR_BUTTON = (60, 60, 80)
         self.COLOR_BUTTON_HOVER = (80, 80, 120)
 
-        # 商品项目列表
+        # 商品项目列表 - Add new magic potions (最多8个物品，分2排显示)
         self.items = [
             {
-                "name": f"生命药剂",
+                "name": f"生命",
                 "description": f"恢复 {1000 * floor} 点生命值",
                 "price": 100 * floor,
                 "key": pygame.K_1,
@@ -1771,47 +2424,65 @@ class DungeonShop:
                 "action": self._buy_small_hp
             },
             {
-                "name": f"力量宝石",
-                "description": f"永久提升 {5 * floor} 点攻击力",
-                "price": 100 * floor,
+                "name": f"魔法",
+                "description": f"恢复 {50 * floor} 点魔法值",
+                "price": 200 * floor,
                 "key": pygame.K_2,
                 "label": "2",
+                "icon": self._create_potion_icon((0, 0, 255)),  # 蓝色药水
+                "action": self._buy_small_mp
+            },
+            {
+                "name": f"力量",
+                "description": f"提升 {5 * floor} 点攻击力",
+                "price": 100 * floor,
+                "key": pygame.K_3,
+                "label": "3",
                 "icon": self._create_gem_icon((255, 100, 100)),  # 红色宝石
                 "action": self._buy_small_atk
             },
             {
-                "name": f"护盾宝石",
-                "description": f"永久提升 {5 * floor} 点防御力",
+                "name": f"护盾",
+                "description": f"提升 {5 * floor} 点防御力",
                 "price": 100 * floor,
-                "key": pygame.K_3,
-                "label": "3",
+                "key": pygame.K_4,
+                "label": "4",
                 "icon": self._create_gem_icon((100, 100, 255)),  # 蓝色宝石
                 "action": self._buy_small_def
             },
             {
-                "name": f"大生命药剂",
+                "name": f"大红药",
                 "description": f"恢复 {10000 * floor} 点生命值",
                 "price": 1000 * floor,
-                "key": pygame.K_4,
-                "label": "4",
+                "key": pygame.K_5,
+                "label": "5",
                 "icon": self._create_potion_icon((200, 0, 0), large=True),  # 深红色大药水
                 "action": self._buy_large_hp
             },
             {
-                "name": f"高级力量宝石",
-                "description": f"永久提升 {50 * floor} 点攻击力",
+                "name": f"大蓝药",
+                "description": f"恢复 {500 * floor} 点魔法值",
+                "price": 2000 * floor,
+                "key": pygame.K_6,
+                "label": "6",
+                "icon": self._create_potion_icon((0, 0, 200), large=True),  # 深蓝色大药水
+                "action": self._buy_large_mp
+            },
+            {
+                "name": f"大力量",
+                "description": f"提升 {50 * floor} 点攻击力",
                 "price": 1000 * floor,
-                "key": pygame.K_5,
-                "label": "5",
+                "key": pygame.K_7,
+                "label": "7",
                 "icon": self._create_gem_icon((255, 50, 50), large=True),  # 深红色大宝石
                 "action": self._buy_large_atk
             },
             {
-                "name": f"高级护盾宝石",
-                "description": f"永久提升 {50 * floor} 点防御力",
+                "name": f"大防御",
+                "description": f"提升 {50 * floor} 点防御力",
                 "price": 1000 * floor,
-                "key": pygame.K_6,
-                "label": "6",
+                "key": pygame.K_8,
+                "label": "8",
                 "icon": self._create_gem_icon((50, 50, 255), large=True),  # 深蓝色大宝石
                 "action": self._buy_large_def
             }
@@ -1983,17 +2654,7 @@ class DungeonShop:
         info_rect = info_text.get_rect(centerx=self.window_width // 2, bottom=self.window_height - 20)
         self.shop_surface.blit(info_text, info_rect)
 
-    def _add_shop_particle(self):
-        """添加商店魔法粒子效果 - 已禁用"""
-        pass
-
-    def _update_particles(self, dt):
-        """更新粒子效果 - 已禁用"""
-        # 粒子效果已被禁用，此函数保留以维持接口一致性
-        pass
-
     def _draw_item_card(self, item, x, y, width, height, hovered=False):
-        """绘制商品卡片"""
         # 基础卡片背景
         card_color = self.COLOR_HIGHLIGHT if hovered else (50, 50, 70)
         card_rect = pygame.Rect(x, y, width, height)
@@ -2001,12 +2662,12 @@ class DungeonShop:
         pygame.draw.rect(self.screen, self.COLOR_BORDER, card_rect, 2, border_radius=8)
 
         # 物品图标 - 位置调整
-        icon_rect = item['icon'].get_rect(topleft=(x + 15, y + (height - item['icon'].get_height()) // 2))
+        icon_rect = item['icon'].get_rect(topleft=(x + 10, y + (height - item['icon'].get_height()) // 2))
         self.screen.blit(item['icon'], icon_rect)
 
         # 键位示意
-        key_size = 30
-        key_rect = pygame.Rect(x + width - key_size - 15, y + 10, key_size, key_size)
+        key_size = 24 # 减小按键尺寸
+        key_rect = pygame.Rect(x + width - key_size - 10, y + 8, key_size, key_size)
         pygame.draw.rect(self.screen, (70, 70, 90), key_rect, border_radius=5)
         pygame.draw.rect(self.screen, self.COLOR_BORDER, key_rect, 1, border_radius=5)
 
@@ -2016,28 +2677,44 @@ class DungeonShop:
 
         # 物品名称 - 位置调整
         name_text = self.item_font.render(item['name'], True, self.COLOR_TEXT)
-        name_rect = name_text.get_rect(topleft=(x + 60, y + 12))
+        name_rect = name_text.get_rect(topleft=(x + 45, y + 10))
         self.screen.blit(name_text, name_rect)
 
         # 物品描述 - 位置调整，颜色变淡
-        desc_text = self.info_font.render(item['description'], True, self.COLOR_DESC)
-        desc_rect = desc_text.get_rect(topleft=(x + 60, y + 42))
-        self.screen.blit(desc_text, desc_rect)
+        desc_lines = []
+        desc_words = item['description'].split()
+        line = ""
+        for word in desc_words:
+            test_line = line + word + " "
+            # 检查行宽度，如果太宽则换行
+            if self.info_font.size(test_line)[0] > width - 50:
+                desc_lines.append(line)
+                line = word + " "
+            else:
+                line = test_line
+        if line:
+            desc_lines.append(line)
+
+        # 绘制描述（可能有多行）
+        for i, line in enumerate(desc_lines):
+            desc_text = self.info_font.render(line, True, self.COLOR_DESC)
+            desc_rect = desc_text.get_rect(topleft=(x + 45, y + 35 + i * 18))
+            self.screen.blit(desc_text, desc_rect)
 
         # 价格（根据玩家能否负担变色）- 移至底部
         affordable = self.player.coins >= item['price']
         price_color = self.COLOR_AFFORDABLE if affordable else self.COLOR_UNAFFORDABLE
 
         price_text = self.price_font.render(f"{item['price']} 金币", True, price_color)
-        price_rect = price_text.get_rect(bottomright=(x + width - 15, y + height - 15))
+        price_rect = price_text.get_rect(bottomright=(x + width - 10, y + height - 10))
         self.screen.blit(price_text, price_rect)
 
         # 金币图标
-        coin_radius = 8
+        coin_radius = 6 # 减小金币尺寸
         coin_center = (price_rect.left - coin_radius - 5, price_rect.centery)
         pygame.draw.circle(self.screen, self.COLOR_PRICE, coin_center, coin_radius)
         pygame.draw.circle(self.screen, self.COLOR_SHINE,
-                           (coin_center[0] - 2, coin_center[1] - 2), 2)
+                        (coin_center[0] - 2, coin_center[1] - 2), 2)
 
         return card_rect
 
@@ -2119,6 +2796,32 @@ class DungeonShop:
             self.message = "金币不足！"
             return False
 
+    def _buy_small_mp(self):
+        """购买小MP药水"""
+        price = 100 * self.floor
+        if self.player.coins >= price:
+            self.player.mp = min(self.player.mp + 500 * self.floor, self.player.max_mp)
+            self.player.coins -= price
+            self.message = f"购买成功！恢复 {500 * self.floor} 点魔法值"
+            self._create_purchase_effect((0, 0, 255))
+            return True
+        else:
+            self.message = "金币不足！"
+            return False
+
+    def _buy_large_mp(self):
+        """购买大MP药水"""
+        price = 1000 * self.floor
+        if self.player.coins >= price:
+            self.player.mp = min(self.player.mp + 5000 * self.floor, self.player.max_mp)
+            self.player.coins -= price
+            self.message = f"购买成功！恢复 {5000 * self.floor} 点魔法值"
+            self._create_purchase_effect((0, 0, 200), large=True)
+            return True
+        else:
+            self.message = "金币不足！"
+            return False
+
     def _create_purchase_effect(self, color, large=False):
         """创建购买特效 - 已禁用粒子效果和音效"""
         # 所有效果已移除，保留函数以维持接口一致性
@@ -2179,32 +2882,25 @@ class DungeonShop:
 
             self.hovered_button = self.exit_button.collidepoint(mouse_pos)
 
-            # 更新粒子效果
-            self._update_particles(dt)
-
             # 绘制界面
             self._draw_shop(current_time)
 
             pygame.display.flip()
 
     def _get_item_rect(self, index):
-        """获取商品项目的矩形区域"""
-        # 计算行和列
-        row = index // 2
-        col = index % 2
+        # 计算行和列 - 改为4列2行布局
+        row = index // 4
+        col = index % 4
 
         # 计算卡片尺寸和位置 - 调整为更适合的尺寸
-        card_width = (self.window_width - 80) // 2  # 增加间距
-        card_height = 100  # 增加卡片高度，避免文字重叠
-        card_x = self.window_x + 30 + col * (card_width + 20)
+        card_width = (self.window_width - 100) // 4  # 增加间距，4列布局
+        card_height = 110  # 增加卡片高度，避免文字重叠
+        card_x = self.window_x + 30 + col * (card_width + 10) # 减小间距
         card_y = self.window_y + 100 + row * (card_height + 20)
 
         return pygame.Rect(card_x, card_y, card_width, card_height)
 
     def _draw_shop(self, current_time):
-        """绘制商店界面"""
-        # 不使用遮罩，保留游戏背景
-
         # 绘制商店窗口
         self.screen.blit(self.shop_surface, (self.window_x, self.window_y))
 
@@ -2438,7 +3134,8 @@ class TripleAttack:
                                 target.y * TILE_SIZE + TILE_SIZE // 2),
                         'time': 0.3,
                         'angle': slash['angle'],
-                        'color': slash['color']
+                        'color': slash['color'],
+                        'slash_index': i  # 添加斩击索引，表示第几击
                     })
 
                     # Record damage
@@ -2466,39 +3163,220 @@ class TripleAttack:
         pos = effect['pos']
         angle = math.radians(effect['angle'])
         color = effect['color']
+        slash_index = effect.get('slash_index', 0)  # 获取斩击索引
+        time_ratio = effect['time'] / 0.3  # 时间比例，用于淡出效果
+        alpha = int(255 * time_ratio)
 
-        # Calculate slash line endpoints
-        length = TILE_SIZE * 1.5
+        # 根据斩击索引决定不同的斩击风格
+        if slash_index == 0:  # 第一斩：金色，直线型
+            self._draw_straight_slash(screen, pos, angle, color, alpha)
+            self._draw_impact_marks(screen, pos, color, alpha, "small")
+        elif slash_index == 1:  # 第二斩：橙红色，十字型
+            self._draw_cross_slash(screen, pos, angle, color, alpha)
+            self._draw_impact_marks(screen, pos, color, alpha, "medium")
+        else:  # 第三斩：深红色，爆裂型
+            self._draw_burst_slash(screen, pos, angle, color, alpha)
+            self._draw_impact_marks(screen, pos, color, alpha, "large")
+
+    def _draw_straight_slash(self, screen, pos, angle, color, alpha):
+        """绘制直线型斩击"""
+        # 主要斩击线
+        length = TILE_SIZE * 1.7
+        width = 5
+
         start_x = pos[0] - math.cos(angle) * length / 2
         start_y = pos[1] - math.sin(angle) * length / 2
         end_x = pos[0] + math.cos(angle) * length / 2
         end_y = pos[1] + math.sin(angle) * length / 2
-        alpha = int(255 * effect['time'] / 0.3)
 
-        # Draw main slash line
+        # 绘制主线
         pygame.draw.line(
             screen,
             (*color, alpha),
             (int(start_x), int(start_y)),
             (int(end_x), int(end_y)),
-            4
+            width
         )
 
-        # Add simple hit mark
+        # 绘制外光晕
+        glow_color = (min(255, color[0] + 50), min(255, color[1] + 50), min(255, color[2] + 50), alpha // 2)
+        pygame.draw.line(
+            screen,
+            glow_color,
+            (int(start_x), int(start_y)),
+            (int(end_x), int(end_y)),
+            width + 3
+        )
+
+    def _draw_cross_slash(self, screen, pos, angle, color, alpha):
+        """绘制十字型斩击"""
+        length = TILE_SIZE * 1.5
+        width = 4
+
+        # 第一条线（主角度）
+        start_x1 = pos[0] - math.cos(angle) * length / 2
+        start_y1 = pos[1] - math.sin(angle) * length / 2
+        end_x1 = pos[0] + math.cos(angle) * length / 2
+        end_y1 = pos[1] + math.sin(angle) * length / 2
+
+        # 第二条线（垂直于主角度）
+        perpendicular = angle + math.pi / 2
+        start_x2 = pos[0] - math.cos(perpendicular) * length / 3
+        start_y2 = pos[1] - math.sin(perpendicular) * length / 3
+        end_x2 = pos[0] + math.cos(perpendicular) * length / 3
+        end_y2 = pos[1] + math.sin(perpendicular) * length / 3
+
+        # 绘制十字交叉线
         pygame.draw.line(
             screen,
             (*color, alpha),
-            (int(pos[0] - 5), int(pos[1] - 5)),
-            (int(pos[0] + 5), int(pos[1] + 5)),
-            3
+            (int(start_x1), int(start_y1)),
+            (int(end_x1), int(end_y1)),
+            width
         )
         pygame.draw.line(
             screen,
             (*color, alpha),
-            (int(pos[0] - 5), int(pos[1] + 5)),
-            (int(pos[0] + 5), int(pos[1] - 5)),
-            3
+            (int(start_x2), int(start_y2)),
+            (int(end_x2), int(end_y2)),
+            width - 1
         )
+
+        # 交点处添加亮点
+        highlight_color = (min(255, color[0] + 70), min(255, color[1] + 70), min(255, color[2] + 70), alpha)
+        pygame.draw.circle(screen, highlight_color, (int(pos[0]), int(pos[1])), width)
+
+    def _draw_burst_slash(self, screen, pos, angle, color, alpha):
+        """绘制爆裂型斩击（最终一击）"""
+        center_x, center_y = int(pos[0]), int(pos[1])
+        radius = TILE_SIZE * 0.8
+
+        # 中心爆发光晕
+        glow_surface = pygame.Surface((int(radius * 2), int(radius * 2)), pygame.SRCALPHA)
+        for r in range(int(radius), 0, -4):
+            # 渐变透明度
+            circle_alpha = min(alpha, int(alpha * (r / radius)))
+            glow_color = (*color, circle_alpha)
+            pygame.draw.circle(glow_surface, glow_color, (int(radius), int(radius)), r, 2)
+
+        # 添加放射状线条
+        line_count = 12
+        line_length = radius * 1.3
+        for i in range(line_count):
+            line_angle = 2 * math.pi * i / line_count
+            start_x = radius + radius * 0.5 * math.cos(line_angle)
+            start_y = radius + radius * 0.5 * math.sin(line_angle)
+            end_x = radius + line_length * math.cos(line_angle)
+            end_y = radius + line_length * math.sin(line_angle)
+
+            # 线宽度随时间变化
+            line_width = max(1, int(3 * alpha / 255))
+            pygame.draw.line(
+                glow_surface,
+                (*color, alpha),
+                (int(start_x), int(start_y)),
+                (int(end_x), int(end_y)),
+                line_width
+            )
+
+        # 绘制到屏幕
+        screen.blit(glow_surface, (center_x - int(radius), center_y - int(radius)))
+
+    def _draw_impact_marks(self, screen, pos, color, alpha, size):
+        """绘制斩击痕迹"""
+        center_x, center_y = int(pos[0]), int(pos[1])
+
+        if size == "small":
+            # 小型痕迹：简单的交叉
+            pygame.draw.line(
+                screen,
+                (*color, alpha),
+                (center_x - 6, center_y - 6),
+                (center_x + 6, center_y + 6),
+                2
+            )
+            pygame.draw.line(
+                screen,
+                (*color, alpha),
+                (center_x - 6, center_y + 6),
+                (center_x + 6, center_y - 6),
+                2
+            )
+
+        elif size == "medium":
+            # 中型痕迹：带有些许不规则的星形痕迹
+            points = []
+            point_count = 5
+            for i in range(point_count):
+                angle = 2 * math.pi * i / point_count
+                # 内外半径交替，形成星形
+                radius = 7 if i % 2 == 0 else 4
+                x = center_x + radius * math.cos(angle)
+                y = center_y + radius * math.sin(angle)
+                points.append((x, y))
+
+            # 绘制连接的线段
+            for i in range(point_count):
+                start = points[i]
+                end = points[(i + 1) % point_count]
+                pygame.draw.line(
+                    screen,
+                    (*color, alpha),
+                    start, end,
+                    2
+                )
+
+        else:  # large
+            # 大型痕迹：不规则的破碎痕迹
+            # 中心破碎区
+            pygame.draw.circle(screen, (*color, alpha), (center_x, center_y), 8)
+
+            # 放射状破碎线
+            for i in range(8):
+                angle = 2 * math.pi * i / 8 + random.uniform(-0.2, 0.2)
+                length = random.uniform(8, 14)
+                end_x = center_x + length * math.cos(angle)
+                end_y = center_y + length * math.sin(angle)
+
+                # 有些线断开一点，增加破碎感
+                if random.random() < 0.5:
+                    mid_x = center_x + length * 0.6 * math.cos(angle)
+                    mid_y = center_y + length * 0.6 * math.sin(angle)
+                    pygame.draw.line(
+                        screen,
+                        (*color, alpha),
+                        (center_x, center_y),
+                        (mid_x, mid_y),
+                        2
+                    )
+                    pygame.draw.line(
+                        screen,
+                        (*color, alpha),
+                        (mid_x + 2 * math.cos(angle), mid_y + 2 * math.sin(angle)),
+                        (end_x, end_y),
+                        2
+                    )
+                else:
+                    pygame.draw.line(
+                        screen,
+                        (*color, alpha),
+                        (center_x, center_y),
+                        (end_x, end_y),
+                        2
+                    )
+
+            # 添加一些小碎片
+            for _ in range(5):
+                dist = random.uniform(6, 12)
+                angle = random.uniform(0, 2 * math.pi)
+                fragment_x = center_x + dist * math.cos(angle)
+                fragment_y = center_y + dist * math.sin(angle)
+                pygame.draw.circle(
+                    screen,
+                    (*color, alpha),
+                    (int(fragment_x), int(fragment_y)),
+                    random.randint(1, 2)
+                )
 
 # -------------------- 纯青烈焰重击 --------------
 
@@ -2619,28 +3497,158 @@ class FireStrikeEffect:
 
 class ElectricEffect:
     def __init__(self, px, py):
-        self.particles = []
-        self.duration = 0.3  # 持续时间0.3秒
-        # 生成随机闪电路径
-        for _ in range(8):
-            start = (px * TILE_SIZE + random.randint(5, 25), py * TILE_SIZE + random.randint(5, 25))
-            end = (start[0] + random.randint(-20, 20), start[1] + random.randint(-20, 20))
-            self.particles.append({
-                'start': start,
-                'end': end,
-                'alpha': 255
+        self.center_x = px * TILE_SIZE + TILE_SIZE // 2
+        self.center_y = py * TILE_SIZE + TILE_SIZE // 2
+        self.duration = 0.4  # 稍微延长持续时间
+        self.time_passed = 0
+
+        # 主电击效果
+        self.sparks = []
+        self.branches = []
+        self.glow_radius = TILE_SIZE // 2
+
+        # 生成多层次的电击效果
+        self._generate_sparks()
+
+    def _generate_sparks(self):
+        # 主电击射线 - 从中心向外发散
+        for _ in range(6):
+            angle = random.uniform(0, 2 * math.pi)
+            length = random.uniform(TILE_SIZE * 0.5, TILE_SIZE * 0.8)
+            self.sparks.append({
+                'angle': angle,
+                'length': length,
+                'width': random.uniform(1.5, 3),
+                'segments': random.randint(3, 5),  # 闪电段数
+                'lifetime': self.duration * random.uniform(0.7, 1.0),
+                'color': (255, 255, 0) if random.random() > 0.4 else (200, 230, 255),
+                'branches': []
             })
 
+            # 每条主射线添加分支
+            if random.random() > 0.3:
+                for _ in range(random.randint(1, 2)):
+                    fork_distance = random.uniform(0.3, 0.7)  # 从主射线的位置开始分叉
+                    fork_angle = angle + random.uniform(-1, 1)  # 分叉角度
+                    fork_length = length * random.uniform(0.4, 0.6)  # 分叉长度
+
+                    self.sparks[-1]['branches'].append({
+                        'distance': fork_distance,
+                        'angle': fork_angle,
+                        'length': fork_length,
+                        'width': random.uniform(1, 2),
+                        'lifetime': self.duration * random.uniform(0.5, 0.8)
+                    })
+
     def update(self, dt):
-        self.duration -= dt
-        for p in self.particles:
-            p['alpha'] = max(0, p['alpha'] - 20)
-        return self.duration > 0
+        self.time_passed += dt
+
+        # 周期性闪烁效果
+        if self.time_passed > self.duration * 0.7 and random.random() > 0.7:
+            self._generate_sparks()  # 随机再生成一些电火花
+
+        return self.time_passed < self.duration
 
     def draw(self, screen):
-        for p in self.particles:
-            color = (255, 255, 0, p['alpha']) if random.random() > 0.3 else (255, 165, 0, p['alpha'])
-            pygame.draw.line(screen, color, p['start'], p['end'], 2)
+        progress = self.time_passed / self.duration
+        fade_factor = 1.0 - progress  # 随时间淡出
+
+        # 绘制中心光晕
+        glow_alpha = int(180 * fade_factor * (0.7 + 0.3 * math.sin(self.time_passed * 15)))
+        glow_radius = self.glow_radius * (0.8 + 0.2 * math.sin(self.time_passed * 10))
+
+        glow_surface = pygame.Surface((int(glow_radius * 2), int(glow_radius * 2)), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surface, (255, 255, 100, glow_alpha),
+                           (int(glow_radius), int(glow_radius)), int(glow_radius))
+        screen.blit(glow_surface,
+                    (int(self.center_x - glow_radius), int(self.center_y - glow_radius)))
+
+        # 绘制电击射线
+        for spark in self.sparks:
+            if self.time_passed > spark['lifetime']:
+                continue
+
+            spark_progress = self.time_passed / spark['lifetime']
+            alpha = int(255 * (1.0 - spark_progress))
+
+            # 生成闪电路径点
+            points = self._generate_lightning_path(
+                self.center_x, self.center_y,
+                spark['angle'], spark['length'],
+                spark['segments']
+            )
+
+            # 绘制主射线
+            for i in range(len(points) - 1):
+                # 随机闪烁效果
+                if random.random() > 0.1 * spark_progress:  # 随时间增加闪烁概率
+                    color = (*spark['color'], alpha)
+                    width = max(1, spark['width'] * (1.0 - spark_progress))
+                    pygame.draw.line(screen, color, points[i], points[i + 1], int(width))
+
+            # 绘制分支
+            for branch in spark['branches']:
+                if self.time_passed > branch['lifetime']:
+                    continue
+
+                branch_progress = self.time_passed / branch['lifetime']
+                branch_alpha = int(200 * (1.0 - branch_progress))
+
+                # 计算分支起点
+                branch_index = min(int(branch['distance'] * len(points)), len(points) - 1)
+                if branch_index < 1:
+                    continue
+
+                branch_start = points[branch_index]
+
+                # 生成分支路径
+                branch_points = self._generate_lightning_path(
+                    branch_start[0], branch_start[1],
+                    branch['angle'], branch['length'],
+                    max(2, spark['segments'] - 1)
+                )
+
+                # 绘制分支
+                for i in range(len(branch_points) - 1):
+                    if random.random() > 0.2 * branch_progress:
+                        color = (*spark['color'], branch_alpha)
+                        width = max(1, branch['width'] * (1.0 - branch_progress))
+                        pygame.draw.line(screen, color, branch_points[i], branch_points[i + 1], int(width))
+
+        # 随机添加电火花粒子
+        if random.random() > 0.7:
+            spark_pos = (
+                self.center_x + random.uniform(-glow_radius, glow_radius) * 0.8,
+                self.center_y + random.uniform(-glow_radius, glow_radius) * 0.8
+            )
+            spark_size = random.uniform(1, 3) * fade_factor
+            spark_color = (255, 255, 100, int(200 * fade_factor))
+
+            pygame.draw.circle(screen, spark_color,
+                               (int(spark_pos[0]), int(spark_pos[1])), int(spark_size))
+
+    def _generate_lightning_path(self, x, y, angle, length, segments):
+        points = [(x, y)]
+
+        current_x, current_y = x, y
+        segment_length = length / segments
+
+        for i in range(segments):
+            # 增加随机偏移，但保持大致方向
+            jitter_angle = angle + random.uniform(-0.5, 0.5)
+
+            # 对于最后一段，减少偏移以保持目标方向
+            if i == segments - 1:
+                jitter_angle = angle + random.uniform(-0.2, 0.2)
+
+            next_x = current_x + math.cos(jitter_angle) * segment_length
+            next_y = current_y + math.sin(jitter_angle) * segment_length
+
+            points.append((next_x, next_y))
+
+            current_x, current_y = next_x, next_y
+
+        return points
 
 
 # --------------- 闪电链技能特效 ---------------
@@ -4612,6 +5620,9 @@ class Game:
         self.maze = []
         self.rooms = []
 
+        # 初始化物品概率系统
+        self.item_system = ItemProbabilitySystem(self)
+
         self.is_animating = False  # 动画播放状态
         self.animation_radius = 0  # 当前动画半径
         self.animation_max_radius = 0  # 最大动画半径
@@ -4625,7 +5636,7 @@ class Game:
         self.last_lava_spawn = 0  # 上次生成史莱姆的时间
 
         self.message_log = []  # 消息日志
-        self.max_log_lines = 40  # 最大显示消息行数
+        self.max_log_lines = 39  # 最大显示消息行数
 
         self.path = []  # 用于存储当前路径
         self.path_timer = 0  # 路径显示计时器
@@ -4667,6 +5678,7 @@ class Game:
 
         # ------------------- 静态背景渲染 -----------------------
         self.background_surface = None  # 新增背景Surface
+        self.player = Player(0,0)
         self.generate_floor()
 
         self.player = Player(self.start_pos[0], self.start_pos[1])  # 游戏生成后玩家位置
@@ -4686,6 +5698,11 @@ class Game:
         TILE_SIZE = CONFIG["TILE_SIZE"]
         SCREEN_WIDTH = CONFIG["SCREEN_WIDTH"]
         SCREEN_HEIGHT = CONFIG["SCREEN_HEIGHT"]
+
+
+    def show_encyclopedia(self):  # 百科全书函数
+        encyclopedia = Encyclopedia(self.screen, self)
+        encyclopedia.run()
 
         # ------------------- 更新移动动画效果 ---------------------
     def set_path_effect(self):
@@ -4733,89 +5750,166 @@ class Game:
         px = self.player.x * TILE_SIZE
         py = self.player.y * TILE_SIZE
 
-        # ------ 基础造型参数 ------
-        body_color = (30, 144, 255)  # 盔甲蓝色
-        skin_color = (255, 218, 185)  # 肤色
-        boots_color = (105, 105, 105)  # 靴子深灰
-        sword_color = (192, 192, 192)  # 剑银灰色
-        sword_highlights = (230, 230, 230)
+        # ------ 配色方案：庄重、威武 ------
+        armor_color = (50, 70, 150)  # 深蓝色盔甲
+        armor_highlight = (100, 120, 220)  # 盔甲高光
+        skin_color = (220, 170, 150)  # 自然肤色
+        cape_color = (140, 20, 20)  # 深红色披风
+        gold_trim = (230, 190, 50)  # 金色装饰
 
-        # ------ 头部绘制 ------
-        head_radius = TILE_SIZE // 6
-        pygame.draw.circle(self.screen, skin_color,
-                           (px + TILE_SIZE // 2, py + head_radius + 2), head_radius)
-        # 面部特征
-        pygame.draw.arc(self.screen, (0, 0, 0),
-                        (px + TILE_SIZE // 2 - head_radius, py + 2,
-                         head_radius * 2, head_radius * 2),
-                        math.radians(200), math.radians(340), 1)  # 微笑曲线
-
-        # ------ 身体躯干 ------
-        torso_height = TILE_SIZE // 3
-        torso_rect = (px + TILE_SIZE // 4, py + head_radius * 2 + 4,
-                      TILE_SIZE // 2, torso_height)
-        pygame.draw.rect(self.screen, body_color, torso_rect)
-
-        # ------ 腿部造型 ------
-        leg_width = TILE_SIZE // 8
-        # 左腿
-        pygame.draw.rect(self.screen, boots_color,
-                         (px + TILE_SIZE // 2 - leg_width * 2, py + torso_height + head_radius * 2 + 4,
-                          leg_width, TILE_SIZE // 3))
-        # 右腿
-        pygame.draw.rect(self.screen, boots_color,
-                         (px + TILE_SIZE // 2 + leg_width, py + torso_height + head_radius * 2 + 4,
-                          leg_width, TILE_SIZE // 3))
-
-        # ------ 手臂动态造型 ------
-        arm_length = TILE_SIZE // 3
-        # 左臂（握剑姿势）
-        pygame.draw.line(self.screen, skin_color,
-                         (px + TILE_SIZE // 4, py + head_radius * 2 + torso_height // 2),
-                         (px + TILE_SIZE // 4 - arm_length // 2,
-                          py + head_radius * 2 + torso_height // 2 + arm_length // 2),
-                         3)
-        # 右臂（自然下垂）
-        pygame.draw.line(self.screen, skin_color,
-                         (px + TILE_SIZE - TILE_SIZE // 4, py + head_radius * 2 + torso_height // 2),
-                         (px + TILE_SIZE - TILE_SIZE // 4 + arm_length // 3,
-                          py + head_radius * 2 + torso_height // 2 + arm_length // 3),
-                         3)
-
-        # ------ 精致长剑造型 ------
-        sword_x = px + TILE_SIZE // 4 - arm_length // 2  # 剑柄起始位置
-        sword_y = py + head_radius * 2 + torso_height // 2 + arm_length // 2
-
-        # 剑刃（带渐细效果）
-        blade_points = [
-            (sword_x - 1, sword_y),
-            (sword_x - TILE_SIZE // 3, sword_y - TILE_SIZE // 2),  # 剑尖
-            (sword_x + 1, sword_y),
-            (sword_x + TILE_SIZE // 8, sword_y + TILE_SIZE // 8)
+        # ------ 披风 ------
+        cape_points = [
+            (px + TILE_SIZE * 0.25, py + TILE_SIZE * 0.35),  # 左肩
+            (px + TILE_SIZE * 0.75, py + TILE_SIZE * 0.35),  # 右肩
+            (px + TILE_SIZE * 0.85, py + TILE_SIZE * 0.85),  # 右下角
+            (px + TILE_SIZE * 0.15, py + TILE_SIZE * 0.85),  # 左下角
         ]
-        pygame.draw.polygon(self.screen, sword_color, blade_points)
+        pygame.draw.polygon(self.screen, cape_color, cape_points)
 
-        # 剑柄装饰
-        hilt_rect = (sword_x - 2, sword_y - 3, 4, 6)
-        pygame.draw.rect(self.screen, (139, 69, 19), hilt_rect)  # 木柄颜色
-        pygame.draw.circle(self.screen, (255, 215, 0),  # 宝石装饰
-                           (sword_x, sword_y - 1), 2)
+        # ------ 躯干（盔甲） ------
+        torso_rect = pygame.Rect(
+            px + TILE_SIZE * 0.3, py + TILE_SIZE * 0.35,
+            TILE_SIZE * 0.4, TILE_SIZE * 0.3
+        )
+        pygame.draw.rect(self.screen, armor_color, torso_rect)
 
-        # 剑刃高光
-        pygame.draw.line(self.screen, sword_highlights,
-                         (sword_x - TILE_SIZE // 4, sword_y - TILE_SIZE // 3),
-                         (sword_x - TILE_SIZE // 8, sword_y - TILE_SIZE // 6), 1)
+        # 胸甲装饰线
+        pygame.draw.line(
+            self.screen, gold_trim,
+            (px + TILE_SIZE * 0.3, py + TILE_SIZE * 0.45),
+            (px + TILE_SIZE * 0.7, py + TILE_SIZE * 0.45),
+            2
+        )
 
-        # ------ 盔甲细节 ------
         # 肩甲
-        pygame.draw.arc(self.screen, (255, 255, 255),
-                        (px + TILE_SIZE // 4 - 2, py + head_radius * 2 + 2,
-                         TILE_SIZE // 2 + 4, torso_height // 2),
-                        math.radians(180), math.radians(360), 2)
-        # 腰带
-        pygame.draw.rect(self.screen, (139, 69, 19),
-                         (px + TILE_SIZE // 4, py + head_radius * 2 + torso_height - 3,
-                          TILE_SIZE // 2, 3))
+        pygame.draw.rect(
+            self.screen, armor_highlight,
+            (px + TILE_SIZE * 0.25, py + TILE_SIZE * 0.35, TILE_SIZE * 0.2, TILE_SIZE * 0.1)
+        )
+        pygame.draw.rect(
+            self.screen, armor_highlight,
+            (px + TILE_SIZE * 0.55, py + TILE_SIZE * 0.35, TILE_SIZE * 0.2, TILE_SIZE * 0.1)
+        )
+
+        # ------ 头部与头盔 ------
+        # 头盔
+        helmet_points = [
+            (px + TILE_SIZE * 0.35, py + TILE_SIZE * 0.25),  # 左侧
+            (px + TILE_SIZE * 0.5, py + TILE_SIZE * 0.15),  # 顶部
+            (px + TILE_SIZE * 0.65, py + TILE_SIZE * 0.25),  # 右侧
+            (px + TILE_SIZE * 0.65, py + TILE_SIZE * 0.35),  # 右下
+            (px + TILE_SIZE * 0.35, py + TILE_SIZE * 0.35),  # 左下
+        ]
+        pygame.draw.polygon(self.screen, armor_color, helmet_points)
+
+        # 头盔装饰
+        pygame.draw.line(
+            self.screen, gold_trim,
+            (px + TILE_SIZE * 0.5, py + TILE_SIZE * 0.15),
+            (px + TILE_SIZE * 0.5, py + TILE_SIZE * 0.25),
+            2
+        )
+
+        # 面罩开口处露出的脸部
+        face_rect = pygame.Rect(
+            px + TILE_SIZE * 0.4, py + TILE_SIZE * 0.25,
+            TILE_SIZE * 0.2, TILE_SIZE * 0.1
+        )
+        pygame.draw.rect(self.screen, skin_color, face_rect)
+
+        # 眼睛（简单威严表情）
+        pygame.draw.line(
+            self.screen, (0, 0, 0),
+            (px + TILE_SIZE * 0.43, py + TILE_SIZE * 0.28),
+            (px + TILE_SIZE * 0.46, py + TILE_SIZE * 0.28),
+            1
+        )
+        pygame.draw.line(
+            self.screen, (0, 0, 0),
+            (px + TILE_SIZE * 0.54, py + TILE_SIZE * 0.28),
+            (px + TILE_SIZE * 0.57, py + TILE_SIZE * 0.28),
+            1
+        )
+
+        # ------ 腿部装甲 ------
+        left_leg = pygame.Rect(
+            px + TILE_SIZE * 0.35, py + TILE_SIZE * 0.65,
+            TILE_SIZE * 0.1, TILE_SIZE * 0.25
+        )
+        right_leg = pygame.Rect(
+            px + TILE_SIZE * 0.55, py + TILE_SIZE * 0.65,
+            TILE_SIZE * 0.1, TILE_SIZE * 0.25
+        )
+        pygame.draw.rect(self.screen, armor_color, left_leg)
+        pygame.draw.rect(self.screen, armor_color, right_leg)
+
+        # 靴子
+        pygame.draw.rect(
+            self.screen, (40, 40, 40),
+            (px + TILE_SIZE * 0.35, py + TILE_SIZE * 0.9, TILE_SIZE * 0.1, TILE_SIZE * 0.1)
+        )
+        pygame.draw.rect(
+            self.screen, (40, 40, 40),
+            (px + TILE_SIZE * 0.55, py + TILE_SIZE * 0.9, TILE_SIZE * 0.1, TILE_SIZE * 0.1)
+        )
+
+        # ------ 武器：大剑 ------
+        # 剑位置（固定在右侧，威武姿态）
+        sword_x = px + TILE_SIZE * 0.75
+        sword_y = py + TILE_SIZE * 0.5
+
+        # 剑柄
+        pygame.draw.rect(
+            self.screen, (80, 60, 40),
+            (sword_x, sword_y, TILE_SIZE * 0.1, TILE_SIZE * 0.15)
+        )
+
+        # 护手
+        pygame.draw.rect(
+            self.screen, gold_trim,
+            (sword_x - TILE_SIZE * 0.05, sword_y, TILE_SIZE * 0.2, TILE_SIZE * 0.05)
+        )
+
+        # 剑身：上长、锋利、威武
+        blade_points = [
+            (sword_x + TILE_SIZE * 0.05, sword_y),  # 连接护手
+            (sword_x + TILE_SIZE * 0.05, py + TILE_SIZE * 0.2),  # 剑尖
+            (sword_x + TILE_SIZE * 0.07, py + TILE_SIZE * 0.2),  # 剑尖右侧
+            (sword_x + TILE_SIZE * 0.07, sword_y),  # 连回护手
+        ]
+        pygame.draw.polygon(self.screen, (180, 180, 200), blade_points)
+
+        # 剑身中线（增加立体感）
+        pygame.draw.line(
+            self.screen, (220, 220, 230),
+            (sword_x + TILE_SIZE * 0.06, sword_y),
+            (sword_x + TILE_SIZE * 0.06, py + TILE_SIZE * 0.2),
+            1
+        )
+
+        # ------ 左手盾牌 ------
+        shield_x = px + TILE_SIZE * 0.15
+        shield_y = py + TILE_SIZE * 0.5
+
+        # 盾牌主体
+        shield_points = [
+            (shield_x, shield_y),  # 顶点
+            (shield_x - TILE_SIZE * 0.15, shield_y + TILE_SIZE * 0.15),  # 左侧
+            (shield_x, shield_y + TILE_SIZE * 0.3),  # 底部
+            (shield_x + TILE_SIZE * 0.15, shield_y + TILE_SIZE * 0.15),  # 右侧
+        ]
+        pygame.draw.polygon(self.screen, armor_color, shield_points)
+
+        # 盾牌边缘
+        pygame.draw.lines(
+            self.screen, gold_trim, True, shield_points, 2
+        )
+
+        # 盾牌花纹
+        pygame.draw.circle(
+            self.screen, gold_trim,
+            (shield_x, shield_y + TILE_SIZE * 0.15), TILE_SIZE * 0.05
+        )
 
     # --------------- 玩家技能释放 -----------------
 
@@ -4824,6 +5918,12 @@ class Game:
         if skill['current_cd'] > 0:
             self.add_message(f"{skill['name']}冷却中!")
             return
+
+        if self.player.mp < skill.get('mp_cost', 0):
+            self.add_message(f"魔法不足，无法释放{skill['name']}!")
+            return
+
+        self.player.mp -= skill.get('mp_cost', 0)
 
         # 火焰重击
         if skill_key == 'FireStrikeEffect':
@@ -8010,184 +9110,220 @@ class Game:
     def draw_chest(self, item):
         x = item.x * TILE_SIZE
         y = item.y * TILE_SIZE
-        # 动画参数
         anim_time = pygame.time.get_ticks()
-        lid_offset = int(2 * math.sin(anim_time / 300))  # 箱盖微微浮动
-        gem_glow = abs(math.sin(anim_time / 200)) * 255  # 宝石发光强度
 
-        # ---- 箱体主体 ----
-        # 木质箱体
-        pygame.draw.rect(self.screen, (101, 67, 33),
-                         (x + 4, y + 4 + lid_offset, TILE_SIZE - 8, TILE_SIZE - 8),
-                         border_radius=4)
-        # 木质纹理
-        for i in range(3):
-            line_y = y + 8 + i * 8 + lid_offset
-            pygame.draw.line(self.screen, (81, 53, 28),
-                             (x + 6, line_y), (x + TILE_SIZE - 6, line_y), 2)
+        # 调整尺寸比例，适合单格
+        width = TILE_SIZE * 0.8
+        height = TILE_SIZE * 0.65
+        x_offset = (TILE_SIZE - width) / 2
+        y_offset = (TILE_SIZE - height) / 2
 
-        # ---- 金属包角 ----
-        metal_color = (198, 155, 93)  # 古铜色
-        # 四角装饰
-        corners = [
-            (x + 2, y + 2), (x + TILE_SIZE - 8, y + 2),
-            (x + 2, y + TILE_SIZE - 8), (x + TILE_SIZE - 8, y + TILE_SIZE - 8)
-        ]
-        for cx, cy in corners:
-            # 金属浮雕
-            pygame.draw.polygon(self.screen, metal_color, [
-                (cx, cy), (cx + 6, cy), (cx + 6, cy + 3), (cx + 3, cy + 6), (cx, cy + 6)
-            ])
-            # 高光
-            pygame.draw.line(self.screen, (230, 200, 150),
-                             (cx + 1, cy + 1), (cx + 5, cy + 1), 2)
+        # 箱体底色(红褐色)
+        pygame.draw.rect(self.screen, (140, 60, 60),
+                         (x + x_offset, y + y_offset, width, height),
+                         border_radius=int(height / 3))
 
-        # ---- 锁具系统 ----
-        lock_x, lock_y = x + TILE_SIZE // 2, y + TILE_SIZE // 2 + lid_offset
-        # 锁体
-        pygame.draw.rect(self.screen, (60, 60, 60),
-                         (lock_x - 6, lock_y - 4, 12, 8), border_radius=2)
-        # 锁孔
-        pygame.draw.line(self.screen, (120, 120, 120),
-                         (lock_x, lock_y - 2), (lock_x, lock_y + 2), 3)
-        # 动态锁环
-        pygame.draw.circle(self.screen, metal_color,
-                           (lock_x, lock_y - 8), 4, width=2)
+        # 金色边框
+        pygame.draw.rect(self.screen, (220, 180, 50),
+                         (x + x_offset, y + y_offset, width, height),
+                         2, border_radius=int(height / 3))
 
-        # ---- 宝石装饰 ----
-        gem_positions = [
-            (x + 10, y + 10), (x + TILE_SIZE - 14, y + 10),
-            (x + 10, y + TILE_SIZE - 14), (x + TILE_SIZE - 14, y + TILE_SIZE - 14)
-        ]
-        for gx, gy in gem_positions:
-            # 宝石底座
-            pygame.draw.circle(self.screen, (50, 50, 50), (gx, gy), 5)
-            # 动态发光宝石
-            pygame.draw.circle(self.screen,
-                               (255, 215, 0, int(gem_glow)),
-                               (gx, gy), 3)
+        # 水平金属条(上)
+        pygame.draw.rect(self.screen, (220, 180, 50),
+                         (x + x_offset, y + y_offset + height * 0.3, width, height * 0.1))
 
-        # ---- 环境光效 ----
-        # 底部阴影
-        shadow = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow, (0, 0, 0, 50),
-                            (x, y + TILE_SIZE - 8, TILE_SIZE, 8))
-        self.screen.blit(shadow, (x, y))
+        # 水平金属条(下)
+        pygame.draw.rect(self.screen, (220, 180, 50),
+                         (x + x_offset, y + y_offset + height * 0.6, width, height * 0.1))
 
-        # 顶部高光
-        highlight_points = [
-            (x + 8, y + 4 + lid_offset), (x + TILE_SIZE // 2, y),
-            (x + TILE_SIZE - 8, y + 4 + lid_offset)
-        ]
-        pygame.draw.polygon(self.screen, (255, 255, 255, 80), highlight_points)
+        # 垂直金属条
+        pygame.draw.rect(self.screen, (220, 180, 50),
+                         (x + x_offset + width / 2 - 2, y + y_offset, 4, height))
 
-    # ------------- 小红药水 ----------------
+        # 锁具
+        lock_size = width * 0.2
+        pygame.draw.rect(self.screen, (180, 150, 40),
+                         (x + x_offset + width / 2 - lock_size / 2,
+                          y + y_offset + height * 0.4,
+                          lock_size, lock_size))
 
-    def draw_hp(self, item):
+        # 骷髅图案(简化)
+        skull_x = x + x_offset + width / 2
+        skull_y = y + y_offset + height * 0.45
+        skull_size = width * 0.14
+
+        # 头骨
+        pygame.draw.circle(self.screen, (240, 240, 240),
+                           (skull_x, skull_y), int(skull_size))
+
+        # 红宝石(闪烁效果替代眼睛)
+        ruby_size = skull_size * 0.35
+        ruby_glow = abs(math.sin(anim_time / 300))
+        ruby_color = (200 + int(55 * ruby_glow), 20, 20)  # 红宝石颜色随时间变化
+
+        # 中央红宝石
+        pygame.draw.circle(self.screen, ruby_color,
+                           (skull_x, skull_y), int(ruby_size))
+
+        # 宝石高光
+        if ruby_glow > 0.7:
+            pygame.draw.circle(self.screen, (255, 180, 180),
+                               (skull_x - ruby_size / 3, skull_y - ruby_size / 3), 2)
+
+        # 箱体闪光效果
+        if anim_time % 2000 < 300:
+            shine_pos = x + x_offset + width * 0.25
+            pygame.draw.circle(self.screen, (255, 255, 200),
+                               (shine_pos, y + y_offset + height * 0.25), 2)
+
+    # ------------- 红药水 ----------------
+
+    def draw_potion(self, item):
         x = item.x * TILE_SIZE
         y = item.y * TILE_SIZE
-        # 药水瓶尺寸
-        bottle_width = TILE_SIZE - 8
-        bottle_height = TILE_SIZE * 0.8
-        neck_width = bottle_width * 0.4
-        neck_height = TILE_SIZE * 0.15
+
+        # 确定药水尺寸和位置 - 适合单格
+        width = TILE_SIZE * 0.6
+        height = TILE_SIZE * 0.7
+        bottle_x = x + (TILE_SIZE - width) / 2
+        bottle_y = y + (TILE_SIZE - height) / 2
 
         # 药水颜色
-        if "SMALL" in item.item_type:
-            liquid_color = (200, 50, 50)  # 鲜红色
-            highlight_color = (255, 100, 100)
-        else:
-            liquid_color = (150, 0, 0)  # 深红色
-            highlight_color = (200, 50, 50)
+        if "HP" in item.item_type:
+            if "SMALL" in item.item_type:
+                liquid_color = (220, 40, 40)  # 鲜红色 (小红药)
+                glow_color = (255, 120, 120)  # 高光色
+            else:
+                liquid_color = (180, 0, 0)  # 深红色 (大红药)
+                glow_color = (220, 60, 60)  # 高光色
+        elif "MP" in item.item_type:
+            if "SMALL" in item.item_type:
+                liquid_color = (40, 40, 220)  # 鲜蓝色 (小蓝药)
+                glow_color = (120, 120, 255)  # 高光色
+            else:
+                liquid_color = (0, 0, 180)  # 深蓝色 (大蓝药)
+                glow_color = (60, 60, 220)  # 高光色
 
-        # 瓶身
-        bottle_rect = (x + (TILE_SIZE - bottle_width) // 2,
-                       y + TILE_SIZE - bottle_height,
-                       bottle_width, bottle_height)
-        pygame.draw.rect(self.screen, (150, 150, 200), bottle_rect, border_radius=8)  # 玻璃瓶
-
-        # 液体
-        liquid_level = bottle_height * 0.8 if "SMALL" in item.item_type else bottle_height * 0.9
-        liquid_rect = (bottle_rect[0] + 2,
-                       bottle_rect[1] + bottle_height - liquid_level,
-                       bottle_width - 4, liquid_level - 2)
-        pygame.draw.rect(self.screen, liquid_color, liquid_rect, border_radius=6)
-
-        # 液体高光
-        pygame.draw.line(self.screen, highlight_color,
-                         (liquid_rect[0] + 4, liquid_rect[1] + 4),
-                         (liquid_rect[0] + liquid_rect[2] - 8, liquid_rect[1] + 4), 2)
-
-        # 瓶口
-        neck_rect = (x + (TILE_SIZE - neck_width) // 2,
-                     y + TILE_SIZE - bottle_height - neck_height,
-                     neck_width, neck_height)
-        pygame.draw.rect(self.screen, (180, 180, 220), neck_rect, border_radius=4)
+        # 瓶颈
+        neck_width = width * 0.4
+        neck_height = height * 0.2
+        neck_x = bottle_x + (width - neck_width) / 2
+        neck_y = bottle_y
+        pygame.draw.rect(self.screen, (170, 170, 210),
+                         (neck_x, neck_y, neck_width, neck_height),
+                         border_radius=int(neck_width * 0.2))
 
         # 瓶塞
-        cork_rect = (neck_rect[0] + 2, neck_rect[1] - 4,
-                     neck_width - 4, 6)
-        pygame.draw.rect(self.screen, (150, 100, 50), cork_rect, border_radius=2)
+        cork_width = neck_width * 0.8
+        cork_height = neck_height * 0.5
+        cork_x = neck_x + (neck_width - cork_width) / 2
+        cork_y = neck_y - cork_height * 0.8
+        pygame.draw.rect(self.screen, (140, 90, 40),
+                         (cork_x, cork_y, cork_width, cork_height),
+                         border_radius=int(cork_width * 0.2))
 
-        # 玻璃反光
-        pygame.draw.line(self.screen, (200, 200, 255),
-                         (bottle_rect[0] + 4, bottle_rect[1] + 4),
-                         (bottle_rect[0] + bottle_width // 2, bottle_rect[1] + 8), 2)
+        # 瓶身
+        body_width = width
+        body_height = height * 0.8
+        body_x = bottle_x
+        body_y = bottle_y + neck_height * 0.8
+        pygame.draw.rect(self.screen, (180, 180, 220, 200),
+                         (body_x, body_y, body_width, body_height),
+                         border_radius=int(body_width * 0.3))
 
-    # ------------- 攻击宝石 ----------------
+        # 药水液体
+        liquid_height = body_height * 0.85
+        liquid_y = body_y + body_height - liquid_height
+        pygame.draw.rect(self.screen, liquid_color,
+                         (body_x + 2, liquid_y, body_width - 4, liquid_height),
+                         border_radius=int(body_width * 0.25))
+
+        # 液体波纹
+        wave_y = liquid_y + liquid_height * 0.15
+        pygame.draw.line(self.screen, glow_color,
+                         (body_x + 3, wave_y),
+                         (body_x + body_width - 3, wave_y), 2)
+
+        # 瓶身反光/高光
+        pygame.draw.line(self.screen, (255, 255, 255, 150),
+                         (body_x + body_width * 0.2, body_y + body_height * 0.2),
+                         (body_x + body_width * 0.1, body_y + body_height * 0.5), 2)
+
+    # ------------- 宝石 ----------------
 
     def draw_gem(self, item):
         x = item.x * TILE_SIZE
         y = item.y * TILE_SIZE
-        # 宝石尺寸
-        gem_size = TILE_SIZE * 0.8
-        gem_center = (x + TILE_SIZE // 2, y + TILE_SIZE // 2)
+        anim_time = pygame.time.get_ticks()
 
-        # 宝石颜色
+        # 确定宝石中心位置和尺寸
+        size = TILE_SIZE * 0.6
+        center_x = x + TILE_SIZE // 2
+        center_y = y + TILE_SIZE // 2
+
+        # 根据类型设置颜色
         if item.item_type == "ATK_GEM":
-            gem_color = (255, 80, 0)  # 橙红色
-            highlight_color = (255, 180, 50)
-        else:
-            gem_color = (0, 100, 200)  # 深蓝色
-            highlight_color = (100, 200, 255)
+            main_color = (180, 30, 30)  # 深红色
+            mid_color = (220, 50, 50)  # 中红色
+            light_color = (255, 100, 100)  # 浅红色
+        elif item.item_type == "DEF_GEM":
+            main_color = (20, 50, 150)  # 深蓝色
+            mid_color = (40, 80, 200)  # 中蓝色
+            light_color = (80, 120, 240)  # 浅蓝色
+        elif item.item_type == "ATK_GEM_LARGE":
+            main_color = (180, 20, 20)  # 深红色
+            mid_color = (220, 40, 40)  # 中红色
+            light_color = (255, 80, 80)  # 浅红色
+            # 大宝石尺寸略大
+            size = TILE_SIZE * 0.75
+        elif item.item_type == "DEF_GEM_LARGE":
+            main_color = (10, 40, 140)  # 深蓝色
+            mid_color = (30, 70, 190)  # 中蓝色
+            light_color = (70, 110, 230)  # 浅蓝色
+            # 大宝石尺寸略大
+            size = TILE_SIZE * 0.75
 
-        # 宝石切面
-        gem_points = [
-            (gem_center[0], gem_center[1] - gem_size // 2),  # 上顶点
-            (gem_center[0] + gem_size // 3, gem_center[1] - gem_size // 6),  # 右上
-            (gem_center[0] + gem_size // 2, gem_center[1]),  # 右顶点
-            (gem_center[0] + gem_size // 3, gem_center[1] + gem_size // 6),  # 右下
-            (gem_center[0], gem_center[1] + gem_size // 2),  # 下顶点
-            (gem_center[0] - gem_size // 3, gem_center[1] + gem_size // 6),  # 左下
-            (gem_center[0] - gem_size // 2, gem_center[1]),  # 左顶点
-            (gem_center[0] - gem_size // 3, gem_center[1] - gem_size // 6)  # 左上
+        # 椭圆形宝石基本形状
+        pygame.draw.ellipse(self.screen, main_color,
+                            (center_x - size / 2, center_y - size / 2 + size * 0.05, size, size * 0.9))
+
+        # 主要切面
+        facet_points = [
+            (center_x, center_y - size * 0.35),  # 顶部
+            (center_x + size * 0.35, center_y),  # 右侧
+            (center_x, center_y + size * 0.35),  # 底部
+            (center_x - size * 0.35, center_y),  # 左侧
         ]
-        pygame.draw.polygon(self.screen, gem_color, gem_points)
+        pygame.draw.polygon(self.screen, mid_color, facet_points)
 
-        # 切面高光
+        # 中央切面
+        inner_scale = 0.2
+        inner_facet = [
+            (center_x, center_y - size * inner_scale),
+            (center_x + size * inner_scale, center_y),
+            (center_x, center_y + size * inner_scale),
+            (center_x - size * inner_scale, center_y)
+        ]
+        pygame.draw.polygon(self.screen, light_color, inner_facet)
+
+        # 高光切面 (顶部和右侧)
         highlight_points = [
-            (gem_center[0], gem_center[1] - gem_size // 3),
-            (gem_center[0] + gem_size // 4, gem_center[1] - gem_size // 8),
-            (gem_center[0] + gem_size // 3, gem_center[1]),
-            (gem_center[0] + gem_size // 4, gem_center[1] + gem_size // 8),
-            (gem_center[0], gem_center[1] + gem_size // 3)
+            (center_x, center_y - size * 0.35),  # 顶点
+            (center_x + size * 0.2, center_y - size * 0.2),  # 右上
+            (center_x, center_y)  # 中心
         ]
-        pygame.draw.polygon(self.screen, highlight_color, highlight_points)
+        pygame.draw.polygon(self.screen, light_color, highlight_points)
 
-        # 宝石底座
-        base_rect = (x + (TILE_SIZE - gem_size) // 2,
-                     y + TILE_SIZE - 8,
-                     gem_size, 6)
-        pygame.draw.rect(self.screen, (100, 100, 100), base_rect, border_radius=2)
+        # 随机闪烁高光点
+        if anim_time % 3000 < 200:
+            # 右上高光点
+            pygame.draw.circle(self.screen, (255, 255, 255), (int(center_x + size * 0.15), int(center_y - size * 0.15)),
+                               2)
 
-        # 宝石闪光
-        if random.random() < 0.2:  # 20%概率出现闪光
-            flash_points = [
-                (gem_center[0] - gem_size // 4, gem_center[1] - gem_size // 4),
-                (gem_center[0] + gem_size // 4, gem_center[1] + gem_size // 4)
-            ]
-            pygame.draw.line(self.screen, (255, 255, 255),
-                             flash_points[0], flash_points[1], 2)
+        # 为大宝石添加额外的闪烁效果
+        if "LARGE" in item.item_type and anim_time % 1500 < 150:
+            # 中心高光
+            pygame.draw.circle(self.screen, (255, 255, 255), (int(center_x), int(center_y)), 3)
 
     # ------------------- 玩家传送路径绘制 -------------------
 
@@ -8213,6 +9349,54 @@ class Game:
                         self.draw_lightning(start_pos, end_pos, 4, (255, 51, 51))
             # 减少计时器
             self.path_timer -= 1
+
+    # ----------------------- 楼层生成 ------------------------
+
+    def generate_items(self, count):
+        items = []
+
+        # 更新当前楼层的物品掉落修正
+        self.item_system.update_floor_bonus(self.floor)
+
+        # 生成指定数量的物品
+        for _ in range(count):
+            while True:
+                x = random.randint(1, MAP_WIDTH - 2)
+                y = random.randint(1, MAP_HEIGHT - 2)
+                if self.is_position_empty(x, y):
+                    break
+
+            # 使用物品概率系统生成物品
+            item = self.item_system.generate_random_item(x, y)
+            items.append(item)
+
+        return items
+
+    def draw_item_with_rarity(self, item):
+        # 先绘制基本物品
+        if "CHEST" in item.item_type:
+            self.draw_chest(item)
+        elif "HP_" in item.item_type or "MP_" in item.item_type:
+            self.draw_potion(item)
+        elif "GEM" in item.item_type:
+            self.draw_gem(item)
+
+        # 获取物品稀有度和颜色
+        rarity = self.item_system.get_item_rarity(item.item_type)
+        rarity_color = self.item_system.get_rarity_color(rarity)
+
+        # 对"珍贵"物品添加额外粒子效果
+        if rarity == "珍贵" and random.random() < 0.2:  # 10%概率生成粒子
+            x = item.x * TILE_SIZE
+            y = item.y * TILE_SIZE
+            angle = random.uniform(0, math.pi * 2)
+            distance = random.uniform(5, 15)
+            particle_x = x + TILE_SIZE // 2 + math.cos(angle) * distance
+            particle_y = y + TILE_SIZE // 2 + math.sin(angle) * distance
+
+            pygame.draw.circle(self.screen, rarity_color,
+                               (int(particle_x), int(particle_y)),
+                               random.randint(1, 3))
 
     def generate_floor(self):
         # 生成迷宫
@@ -8300,12 +9484,8 @@ class Game:
                         occupied.add((pos[0] + dx, pos[1] + dy))  # 记录普通怪占位
 
         # 生成道具
-        for _ in range(random.randint(ITEM_MIN, ITEM_MAX)):
-            pos = self.get_random_tile(floor_tiles, occupied)
-            if pos:
-                item_type = random.choice(ITEM_TYPES)
-                self.items.append(Item(pos[0], pos[1], item_type))
-                occupied.add(pos)
+        item_count = random.randint(ITEM_MIN, ITEM_MAX)
+        self.items = self.generate_items(item_count)
 
         for room in self.rooms:
             room_center = (room[0] + room[2] // 3, room[1] + room[3] // 3)
@@ -8917,26 +10097,59 @@ class Game:
                 self.add_message(f"装备了 {item.equipment_data['name']} 替换了 {old_equip['name']}")
             else:
                 self.add_message(f"装备了 {item.equipment_data['name']}")
+        else:
+            # 获取物品稀有度
+            rarity = self.item_system.get_item_rarity(item.item_type)
+            if item.item_type == "CHEST":
+                # 随机金币量基于稀有度和楼层
+                gold_multiplier = 1.0
+                if rarity == "稀有":
+                    gold_multiplier = 1.5
+                elif rarity == "罕见":
+                    gold_multiplier = 4.0
+                elif rarity == "珍贵":
+                    gold_multiplier = 6.0
 
-        elif item.item_type == "CHEST":
-            coins = math.ceil(
-                self.floor * random.randint(5, 50) * random.randint(1, 3) * random.randint(1, 3) / random.randint(1, 3))
-            self.player.coins += coins
-            self.add_message(f"Chest, gain {coins} coin")
-        elif item.item_type == "HP_SMALL":
-            self.player.hp = min(self.player.hp + 100 * self.floor, self.player.max_hp)
-            self.add_message(f"Small HP portion, HP +{100 * self.floor}")
-        elif item.item_type == "HP_LARGE":
-            self.player.hp = min(self.player.hp + 500 * self.floor, self.player.max_hp)
-            self.add_message(f"Large HP portion, HP +{500 * self.floor}")
-        elif item.item_type == "ATK_GEM":
-            atk = random.randint(1, 4) * self.floor
-            self.player.base_atk += atk
-            self.add_message(f"ATK gem, ATK +{atk}")
-        elif item.item_type == "DEF_GEM":
-            defend = random.randint(1, 4) * self.floor
-            self.player.base_defense += defend
-            self.add_message(f"DEF gem, DEF +{defend}")
+                gold = int(random.randint(5, 150) * self.floor * gold_multiplier)
+                self.player.coins += gold
+                self.add_message(f"获得 {gold} 金币!")
+                return True
+            elif item.item_type == "HP_SMALL":
+                self.player.hp = min(self.player.hp + 100 * self.floor, self.player.max_hp)
+                self.add_message(f"生命药水, HP +{100 * self.floor}")
+                return True
+            elif item.item_type == "HP_LARGE":
+                self.player.hp = min(self.player.hp + 500 * self.floor, self.player.max_hp)
+                self.add_message(f"大生命药水, HP +{500 * self.floor}")
+                return True
+            elif item.item_type == "MP_SMALL":
+                self.player.mp = min(self.player.mp + 10 * self.floor, self.player.max_mp)
+                self.add_message(f"魔法药水, MP +{10 * self.floor}")
+                return True
+            elif item.item_type == "MP_LARGE":
+                self.player.mp = min(self.player.mp + 50 * self.floor, self.player.max_mp)
+                self.add_message(f"大魔法药水, MP +{50 * self.floor}")
+                return True
+            elif item.item_type == "ATK_GEM":
+                atk = random.randint(1, 4) * self.floor
+                self.player.base_atk += atk
+                self.add_message(f"攻击宝石, ATK +{atk}")
+                return True
+            elif item.item_type == "DEF_GEM":
+                defend = random.randint(1, 4) * self.floor
+                self.player.base_defense += defend
+                self.add_message(f"防御宝石, DEF +{defend}")
+                return True
+            elif item.item_type == "ATK_GEM_LARGE":
+                atk = random.randint(5, 10) * self.floor
+                self.player.base_atk += atk
+                self.add_message(f"大攻击宝石, ATK +{atk}")
+                return True
+            elif item.item_type == "DEF_GEM_LARGE":
+                defend = random.randint(5, 10) * self.floor
+                self.player.base_defense += defend
+                self.add_message(f"大防御宝石, DEF +{defend}")
+                return True
 
     def check_player_attack(self):
         # 获取攻击范围内的所有怪物
@@ -9432,6 +10645,7 @@ class Game:
         if (self.player.x, self.player.y) == self.exit_pos:
             self.floor += 1
             self.clear_dynamic()
+            self.item_system.update_floor_bonus(self.floor) # 楼层物品掉落偏好
             self.generate_floor()
             self.player.x, self.player.y = self.start_pos
             self.add_message(f"进入第 {self.floor} 层")
@@ -9531,93 +10745,93 @@ class Game:
             self.message_log.pop(0)
 
     def draw_stairs(self, screen, x, y, tile_size):
-        """
-        绘制向上的楼梯
-        :param screen: pygame.Surface 对象
-        :param x: 楼梯的左上角 x 坐标
-        :param y: 楼梯的左上角 y 坐标
-        :param tile_size: 每个格子的大小
-        """
-        # ------ 台阶绘制 ------
-        step_height = tile_size // 4  # 每个台阶的高度
-        step_width = tile_size  # 每个台阶的宽度
-        num_steps = 4  # 台阶数量
+        # 获取当前动画时间
+        anim_time = pygame.time.get_ticks()
 
-        # 台阶颜色（石头质感）
-        step_color = (120, 120, 120)  # 灰色
-        highlight_color = (150, 150, 150)  # 高光
-        shadow_color = (80, 80, 80)  # 阴影
+        # ------ 基础背景 - 增加识别度 ------
+        # 整个区域先绘制一个明显的底色
+        bg_rect = pygame.Rect(x, y, tile_size, tile_size)
+        pygame.draw.rect(screen, (100, 100, 170), bg_rect)  # 蓝紫色背景
+        pygame.draw.rect(screen, (120, 120, 190), bg_rect, 3)  # 亮色边框
 
-        for i in range(num_steps):
-            step_y = y + (num_steps - i - 1) * step_height
-            step_x = x + i * (step_width // num_steps)
+        # ------ 楼梯主体结构 - 更加突出 ------
+        step_count = 5  # 增加台阶数量
+        step_height = tile_size // 6
 
-            # 绘制台阶主体
-            pygame.draw.rect(screen, step_color,
-                             (step_x, step_y, step_width - i * (step_width // num_steps), step_height))
+        # 明亮的台阶颜色
+        step_color = (220, 220, 250)  # 亮色台阶
+        step_border = (150, 150, 220)  # 边框色
 
-            # 绘制台阶高光
-            pygame.draw.line(screen, highlight_color,
-                             (step_x, step_y),
-                             (step_x + step_width - i * (step_width // num_steps), step_y), 2)
+        # 绘制台阶序列 - 清晰可见
+        for i in range(step_count):
+            # 明确的阶梯状结构
+            step_width = tile_size - (i * tile_size // 12)  # 逐渐变窄的台阶
+            step_x = x + (tile_size - step_width) // 2
+            step_y = y + tile_size - (i + 1) * step_height - 5
 
-            # 绘制台阶阴影
-            pygame.draw.line(screen, shadow_color,
-                             (step_x, step_y + step_height),
-                             (step_x + step_width - i * (step_width // num_steps), step_y + step_height), 2)
+            # 绘制凸起的台阶
+            pygame.draw.rect(screen, step_color, (step_x, step_y, step_width, step_height))
+            pygame.draw.rect(screen, step_border, (step_x, step_y, step_width, step_height), 1)
 
-        # ------ 魔法符文装饰 ------
-        # 符文颜色
-        rune_color = (0, 255, 255)  # 青色
-        # 符文位置（在台阶侧面）
-        for i in range(num_steps):
-            rune_x = x + i * (step_width // num_steps) + 5
-            rune_y = y + (num_steps - i) * step_height - 5
-            # 绘制符文（简单的几何图案）
-            pygame.draw.circle(screen, rune_color, (rune_x, rune_y), 3)
-            pygame.draw.line(screen, rune_color, (rune_x - 5, rune_y), (rune_x + 5, rune_y), 2)
+        # ------ 添加两侧微小火把效果 ------
+        torch_size = tile_size // 6  # 火把大小
 
-        # ------ 顶部传送门 ------
-        portal_radius = tile_size // 3
-        portal_center_x = x + tile_size // 2
-        portal_center_y = y - portal_radius
+        # 在楼梯两侧各添加一个火把
+        for side in [-1, 1]:  # 左右两侧
+            # 火把位置
+            torch_x = x + tile_size // 2 + side * (tile_size // 3)
+            torch_y = y + tile_size - step_count * step_height + 5
 
-        # 传送门外圈
-        pygame.draw.circle(screen, (255, 215, 0),  # 金色
-                           (portal_center_x, portal_center_y), portal_radius, 2)
+            # 绘制火把柄
+            pygame.draw.rect(screen, (90, 70, 60),
+                             (torch_x - 1, torch_y, 3, torch_size))
 
-        # 传送门内圈（发光效果）
-        for i in range(3):
-            glow_radius = portal_radius - i * 2
-            alpha = 100 - i * 30  # 透明度递减
-            glow_surface = pygame.Surface((glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
-            pygame.draw.circle(glow_surface, (255, 215, 0, alpha),
-                               (glow_radius, glow_radius), glow_radius)
-            screen.blit(glow_surface, (portal_center_x - glow_radius, portal_center_y - glow_radius))
+            # 火焰动画效果 - 使用时间制作火焰抖动
+            flame_offset = math.sin(anim_time / 100) * 1.5
+            flame_size = torch_size + int(math.sin(anim_time / 200) * 2)
 
-        # 传送门中心（魔法漩涡）
-        for i in range(4):
-            angle = pygame.time.get_ticks() / 200 + i * 90  # 动态旋转效果
-            start_pos = (
-                portal_center_x + math.cos(math.radians(angle)) * portal_radius * 0.5,
-                portal_center_y + math.sin(math.radians(angle)) * portal_radius * 0.5
-            )
-            end_pos = (
-                portal_center_x + math.cos(math.radians(angle + 180)) * portal_radius * 0.5,
-                portal_center_y + math.sin(math.radians(angle + 180)) * portal_radius * 0.5
-            )
-            pygame.draw.line(screen, (255, 255, 255), start_pos, end_pos, 2)
+            # 绘制火焰底部 - 较大的橙色基础
+            pygame.draw.circle(screen, (230, 120, 20),
+                               (int(torch_x + flame_offset), int(torch_y - 2)),
+                               flame_size // 2)
 
-        # ------ 藤蔓装饰 ------
-        vine_color = (34, 139, 34)  # 绿色
-        # 左侧藤蔓
-        pygame.draw.arc(screen, vine_color,
-                        (x - tile_size // 2, y - tile_size // 2, tile_size, tile_size),
-                        math.radians(180), math.radians(270), 2)
-        # 右侧藤蔓
-        pygame.draw.arc(screen, vine_color,
-                        (x + tile_size // 2, y - tile_size // 2, tile_size, tile_size),
-                        math.radians(270), math.radians(360), 2)
+            # 绘制火焰中部 - 较小的亮橙色
+            pygame.draw.circle(screen, (250, 170, 30),
+                               (int(torch_x + flame_offset * 0.8), int(torch_y - 3)),
+                               max(2, flame_size // 3))
+
+            # 绘制火焰顶部 - 最小的黄色火焰尖
+            pygame.draw.circle(screen, (255, 220, 50),
+                               (int(torch_x + flame_offset * 0.5), int(torch_y - 4)),
+                               max(1, flame_size // 4))
+
+            # 添加火焰光晕效果
+            glow_radius = flame_size
+            glow_surf = pygame.Surface((glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
+            for radius in range(glow_radius, 0, -1):
+                alpha = max(0, min(150, int(100 * (radius / glow_radius))))
+                pygame.draw.circle(glow_surf, (255, 180, 50, alpha),
+                                   (glow_radius, glow_radius), radius)
+
+            # 绘制光晕
+            screen.blit(glow_surf,
+                        (int(torch_x - glow_radius + flame_offset),
+                         int(torch_y - glow_radius - 2)))
+
+            # 火星效果 - 随机生成几个小火星
+            if random.random() < 0.3:  # 30%概率生成火星
+                for _ in range(2):
+                    spark_x = torch_x + random.uniform(-2, 2) + flame_offset
+                    spark_y = torch_y - random.uniform(2, 6)
+                    spark_size = random.uniform(0.5, 1.5)
+                    spark_alpha = random.randint(100, 200)
+
+                    # 绘制火星
+                    spark_surf = pygame.Surface((4, 4), pygame.SRCALPHA)
+                    pygame.draw.circle(spark_surf, (255, 200, 50, spark_alpha),
+                                       (2, 2), spark_size)
+                    screen.blit(spark_surf, (int(spark_x - 2), int(spark_y - 2)))
+
 
     # ----------------- 墙壁绘制方法 ---------------------------
     def draw_wall(self, x, y, surface=None):
@@ -10443,7 +11657,6 @@ class Game:
 
     # 地面绘画方法
     def draw_floor(self, x, y, surface=None):
-        """绘制地面，与周围环境相协调的增强版地面"""
         surface = surface or self.screen
         rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
         style = self.tile_styles[y][x]
@@ -10607,19 +11820,6 @@ class Game:
                 pygame.draw.rect(wear_surf, wear_color, (0, 0, wear_rect.width, wear_rect.height))
                 surface.blit(wear_surf, wear_rect)
 
-            elif style['wear_pattern'] == 'center':
-                # 中央磨损 (人行走区域)
-                center_size = TILE_SIZE // 2
-                wear_rect = pygame.Rect(
-                    rect.centerx - center_size // 2,
-                    rect.centery - center_size // 2,
-                    center_size, center_size
-                )
-
-                wear_surf = pygame.Surface((center_size, center_size), pygame.SRCALPHA)
-                pygame.draw.ellipse(wear_surf, wear_color, (0, 0, center_size, center_size))
-                surface.blit(wear_surf, wear_rect)
-
             elif style['wear_pattern'] == 'edge':
                 # 边缘磨损
                 edge = random.choice(['top', 'right', 'bottom', 'left'])
@@ -10682,7 +11882,6 @@ class Game:
                 surface.blit(moisture_surf, moisture_rect)
 
     def _draw_fountain_floor(self, rect, surface):
-        """绘制喷泉房间的地板 - 优化版"""
         # 更丰富的大理石底色 - 使用微妙渐变
         base_colors = [(90, 90, 110), (100, 100, 120), (110, 110, 130)]
         base_color = random.choice(base_colors)
@@ -11093,91 +12292,257 @@ class Game:
         self.screen.blit(panel, (SCREEN_WIDTH - SIDEBAR_WIDTH, 0))
 
     # 右侧玩家状态栏及日志
-    # 重新设计技能显示部分：每行两个技能，共三行
     def draw_left_panel(self):
         panel_width = SIDEBAR_WIDTH
         panel = pygame.Surface((panel_width, SCREEN_HEIGHT), pygame.SRCALPHA)
         panel.fill((30, 30, 40, 200))  # 半透明深蓝灰底色
 
         # 动态布局参数
-        current_y = 15  # 当前绘制Y坐标
-        section_gap = 20  # 模块间距
-        module_padding = 10  # 模块内边距
+        current_y = int(panel_width * 0.05)  # 当前绘制Y坐标 - 基于面板宽度的百分比
+        section_gap = int(panel_width * 0.025)  # 模块间距 - 基于面板宽度的百分比
+        module_padding = int(panel_width * 0.038)  # 模块内边距 - 基于面板宽度的百分比
+
+        # 内容区域宽度 - 适配面板宽度
+        content_width = panel_width - (module_padding * 2)
 
         # ------ 状态栏标题 ------
-        title_font = pygame.font.SysFont("SimHei", 24, bold=True)
+        title_font_size = int(panel_width * 0.09)  # 字体大小基于面板宽度
+        title_font = pygame.font.SysFont("SimHei", title_font_size, bold=True)
         title = title_font.render("勇者状态", True, (255, 215, 0))
-        panel.blit(title, (20, current_y))
-        current_y += 40  # 标题高度+间距
+        title_rect = title.get_rect(midtop=(panel_width / 2, current_y))
+        panel.blit(title, title_rect)
+        current_y += title_rect.height + int(panel_width * 0.06)  # 标题高度+间距（基于百分比）
 
         # ------ 核心属性区域 ------
-        attr_height = 100
-        attr_bg = pygame.Surface((260, attr_height), pygame.SRCALPHA)
+        attr_height = int(panel_width * 0.38)  # 基于宽度的百分比
+        attr_bg = pygame.Surface((content_width, attr_height), pygame.SRCALPHA)
         attr_bg.fill((40, 40, 60, 150))
-        pygame.draw.rect(attr_bg, (80, 80, 100), (0, 0, 260, attr_height), 2)
+        pygame.draw.rect(attr_bg, (80, 80, 100), (0, 0, content_width, attr_height), 2)
 
         # 数值显示
-        info_font = pygame.font.SysFont("SimSun", 20, bold=True)
-        attr_bg.blit(info_font.render(f"ATK: {self.player.atk}", True, (255, 180, 180)), (40, 20))
-        attr_bg.blit(info_font.render(f"DEF: {self.player.defense}", True, (180, 200, 255)), (40, 45))
-        hp_color = (50, 200, 50) if self.player.hp / self.player.max_hp > 0.3 else (200, 50, 50)
-        attr_bg.blit(info_font.render(f"HP: {self.player.hp}/{self.player.max_hp}", True, hp_color), (40, 70))
+        info_font_size = int(panel_width * 0.075)  # 字体大小基于面板宽度
+        info_font = pygame.font.SysFont("SimSun", info_font_size, bold=True)
 
-        panel.blit(attr_bg, (20, current_y))
+        # 计算文本垂直间距
+        text_y_gap = attr_height // 5
+
+        # 计算文本起始x坐标 - 基于面板宽度的百分比
+        text_x = int(content_width * 0.15)
+
+        attr_bg.blit(info_font.render(f"ATK: {self.player.atk}", True, (255, 180, 180)),
+                     (text_x, text_y_gap - info_font_size // 2))
+        attr_bg.blit(info_font.render(f"DEF: {self.player.defense}", True, (180, 200, 255)),
+                     (text_x, 2 * text_y_gap - info_font_size // 2))
+
+        hp_color = (50, 200, 50)
+        attr_bg.blit(info_font.render(f"HP: {self.player.hp}/{self.player.max_hp}", True, hp_color),
+                     (text_x, 3 * text_y_gap - info_font_size // 2))
+        mp_color = (50, 150, 255)
+        attr_bg.blit(info_font.render(f"MP: {self.player.mp}/{self.player.max_mp}", True, mp_color),
+                     (text_x, 4 * text_y_gap - info_font_size // 2))
+        # 居中放置属性背景
+        panel.blit(attr_bg, (module_padding, current_y))
         current_y += attr_height + section_gap
 
         # ------ 金币和楼层信息 ------
-        meta_height = 50
-        meta_bg = pygame.Surface((260, meta_height), pygame.SRCALPHA)
+        meta_height = int(panel_width * 0.19)  # 基于宽度的百分比
+        meta_bg = pygame.Surface((content_width, meta_height), pygame.SRCALPHA)
         meta_bg.fill((60, 60, 80, 150))
-        pygame.draw.rect(meta_bg, (80, 80, 100), (0, 0, 260, meta_height), 2)
+        pygame.draw.rect(meta_bg, (80, 80, 100), (0, 0, content_width, meta_height), 2)
+
+        # 金币和楼层信息的水平间距 - 基于背景宽度划分
+        coin_section_width = content_width // 2
+        floor_section_width = content_width // 2
+
+        # 垂直居中
+        icon_y = meta_height // 2
+
+        # 金币图标尺寸 - 基于面板宽度
+        coin_radius = int(panel_width * 0.045)
+        coin_x = int(coin_section_width * 0.2)
 
         # 金币图标
-        pygame.draw.circle(meta_bg, (255, 215, 0), (30, 25), 12)
-        pygame.draw.line(meta_bg, (200, 160, 0), (25, 25), (35, 25), 3)
-        meta_bg.blit(info_font.render(f"{self.player.coins}", True, (255, 215, 0)), (50, 15))
+        pygame.draw.circle(meta_bg, (255, 215, 0), (coin_x, icon_y), coin_radius)
+        pygame.draw.line(meta_bg, (200, 160, 0),
+                         (coin_x - coin_radius // 2, icon_y),
+                         (coin_x + coin_radius // 2, icon_y),
+                         max(1, coin_radius // 4))
+
+        # 金币数量
+        coin_text = info_font.render(f"{self.player.coins}", True, (255, 215, 0))
+        coin_text_pos = (coin_x + coin_radius * 1.5, icon_y - info_font_size // 2)
+        meta_bg.blit(coin_text, coin_text_pos)
+
+        # 楼层图标尺寸 - 基于面板宽度
+        floor_icon_size = int(panel_width * 0.11)
+        floor_x = coin_section_width + int(floor_section_width * 0.2)
 
         # 楼层图标
-        pygame.draw.rect(meta_bg, (147, 112, 219), (160, 10, 30, 30), border_radius=5)
-        meta_bg.blit(info_font.render(f"{self.floor}F", True, (200, 180, 255)), (200, 15))
+        floor_icon_rect = pygame.Rect(
+            floor_x,
+            icon_y - floor_icon_size // 2,
+            floor_icon_size,
+            floor_icon_size
+        )
+        pygame.draw.rect(meta_bg, (147, 112, 219), floor_icon_rect, border_radius=floor_icon_size // 5)
 
-        panel.blit(meta_bg, (20, current_y))
+        # 楼层数字
+        floor_text = info_font.render(f"{self.floor}F", True, (200, 180, 255))
+        floor_text_pos = (floor_x + floor_icon_size * 1.2, icon_y - info_font_size // 2)
+        meta_bg.blit(floor_text, floor_text_pos)
+
+        panel.blit(meta_bg, (module_padding, current_y))
         current_y += meta_height + section_gap
 
         # ------ 装备信息区域 ------
-        equip_height = 80
-        equip_bg = pygame.Surface((260, equip_height), pygame.SRCALPHA)
+        equip_height = int(panel_width * 0.38)  # 基于宽度的百分比
+        equip_bg = pygame.Surface((content_width, equip_height), pygame.SRCALPHA)
         equip_bg.fill((40, 40, 60, 150))
-        pygame.draw.rect(equip_bg, (80, 80, 100), (0, 0, 260, equip_height), 2)
+        pygame.draw.rect(equip_bg, (80, 80, 100), (0, 0, content_width, equip_height), 2)
+
+        # 字体设置 - 基于宽度的百分比
+        eq_font_size = int(panel_width * 0.06)
+        dur_font_size = int(panel_width * 0.05)  # 耐久度字体小一号
+        eq_font = pygame.font.SysFont("SimSun", eq_font_size)
+        dur_font = pygame.font.SysFont("SimSun", dur_font_size)
+
+        # 内边距和栏位尺寸 - 基于容器尺寸的百分比
+        padding_x = int(content_width * 0.08)
+        padding_y = int(equip_height * 0.1)
+        item_height = (equip_height - padding_y * 3) // 2  # 两个装备项目，平均分配高度
+
+        # 耐久度条参数 - 基于容器尺寸
+        bar_width = int(content_width * 0.4)
+        bar_height = max(1, int(panel_width * 0.03))
+        bar_radius = max(1, int(bar_height * 0.25))
 
         # 武器信息
-        eq_font = pygame.font.SysFont("SimSun", 16)
         weapon = self.player.equipped_weapon
         weapon_text = f"武: {weapon['name']}" if weapon else "武: 无"
-        equip_bg.blit(eq_font.render(weapon_text, True, (200, 200, 200) if weapon else (150, 150, 150)), (50, 10))
+        weapon_color = (200, 200, 200) if weapon else (150, 150, 150)
 
-        # 护甲信息
+        # 武器名称文本
+        weapon_label = eq_font.render(weapon_text, True, weapon_color)
+        equip_bg.blit(weapon_label, (padding_x, padding_y))
+
+        # 武器耐久度显示
+        if weapon:
+            # 耐久度条位置计算
+            bar_y = padding_y + eq_font_size + padding_y // 2
+
+            # 耐久度条背景
+            pygame.draw.rect(equip_bg, (60, 60, 60),
+                             (padding_x, bar_y, bar_width, bar_height),
+                             border_radius=bar_radius)
+
+            # 计算耐久度百分比
+            max_dur = EQUIPMENT_TYPES[weapon['tag']]['durability']
+            dur_percent = weapon['durability'] / max_dur
+
+            # 确定耐久度颜色
+            if dur_percent > 0.6:
+                dur_color = (50, 200, 50)  # 绿色
+            elif dur_percent > 0.3:
+                dur_color = (220, 220, 50)  # 黄色
+            else:
+                dur_color = (200, 50, 50)  # 红色
+
+            # 绘制耐久度条
+            if dur_percent > 0:  # 确保有耐久度时才绘制
+                pygame.draw.rect(equip_bg, dur_color,
+                                 (padding_x, bar_y,
+                                  int(bar_width * dur_percent), bar_height),
+                                 border_radius=bar_radius)
+
+            # 显示耐久度数值
+            dur_text = f"耐久: {weapon['durability']}/{max_dur}"
+            dur_label = dur_font.render(dur_text, True, dur_color)
+
+            # 耐久度文本放在条形图右侧
+            text_x = padding_x + bar_width + padding_x // 2
+            text_y = bar_y - (dur_font_size - bar_height) // 2
+            equip_bg.blit(dur_label, (text_x, text_y))
+
+        # 护甲信息 - 第二行
         armor = self.player.equipped_armor
         armor_text = f"甲: {armor['name']}" if armor else "甲: 无"
-        equip_bg.blit(eq_font.render(armor_text, True, (200, 200, 200) if armor else (150, 150, 150)), (160, 10))
+        armor_color = (200, 200, 200) if armor else (150, 150, 150)
 
-        panel.blit(equip_bg, (20, current_y))
+        # 计算护甲信息的Y坐标 - 位于容器一半高度处
+        armor_y = equip_height // 2 + padding_y // 2
+
+        # 护甲名称文本
+        armor_label = eq_font.render(armor_text, True, armor_color)
+        equip_bg.blit(armor_label, (padding_x, armor_y))
+
+        # 护甲耐久度显示
+        if armor:
+            # 耐久度条位置计算
+            bar_y = armor_y + eq_font_size + padding_y // 2
+
+            # 耐久度条背景
+            pygame.draw.rect(equip_bg, (60, 60, 60),
+                             (padding_x, bar_y, bar_width, bar_height),
+                             border_radius=bar_radius)
+
+            # 计算耐久度百分比
+            max_dur = EQUIPMENT_TYPES[armor['tag']]['durability']
+            dur_percent = armor['durability'] / max_dur
+
+            # 确定耐久度颜色
+            if dur_percent > 0.6:
+                dur_color = (50, 200, 50)  # 绿色
+            elif dur_percent > 0.3:
+                dur_color = (220, 220, 50)  # 黄色
+            else:
+                dur_color = (200, 50, 50)  # 红色
+
+            # 绘制耐久度条
+            if dur_percent > 0:  # 确保有耐久度时才绘制
+                pygame.draw.rect(equip_bg, dur_color,
+                                 (padding_x, bar_y,
+                                  int(bar_width * dur_percent), bar_height),
+                                 border_radius=bar_radius)
+
+            # 显示耐久度数值
+            dur_text = f"耐久: {armor['durability']}/{max_dur}"
+            dur_label = dur_font.render(dur_text, True, dur_color)
+
+            # 耐久度文本放在条形图右侧
+            text_x = padding_x + bar_width + padding_x // 2
+            text_y = bar_y - (dur_font_size - bar_height) // 2
+            equip_bg.blit(dur_label, (text_x, text_y))
+
+        panel.blit(equip_bg, (module_padding, current_y))
         current_y += equip_height + section_gap
 
         # ------ 技能面板（重新设计）------
-        skill_height = 200  # 增加高度以容纳3行技能
-        skill_bg = pygame.Surface((260, skill_height), pygame.SRCALPHA)
+        skill_height = int(panel_width * 0.75)  # 基于宽度的百分比
+        skill_bg = pygame.Surface((content_width, skill_height), pygame.SRCALPHA)
         skill_bg.fill((40, 40, 60, 200))
-        pygame.draw.rect(skill_bg, (80, 80, 100), (0, 0, 260, skill_height), 2)
+        pygame.draw.rect(skill_bg, (80, 80, 100), (0, 0, content_width, skill_height), 2)
 
-        skill_font = pygame.font.SysFont("SimSun", 16)  # 减小字体
+        # 技能字体尺寸 - 基于宽度
+        skill_font_size = int(panel_width * 0.06)
+        skill_font = pygame.font.SysFont("SimSun", skill_font_size)
         skill_keys = list(self.player.skills.keys())
 
-        # 技能布局参数
-        skill_width = 120  # 每个技能区域宽度
-        skill_height_item = 60  # 每个技能区域高度
-        horizontal_gap = 10  # 水平间距
-        vertical_gap = 5  # 垂直间距
+        # 技能布局参数 - 基于容器尺寸自适应
+        skill_panel_padding = int(content_width * 0.04)
+        available_width = content_width - (skill_panel_padding * 3)  # 内容区域减去左右边距
+        available_height = skill_height - (skill_panel_padding * 4)  # 内容区域减去上下边距
+
+        # 每行2个技能，共3行
+        columns = 2
+        rows = 3
+
+        # 计算单个技能区域尺寸
+        skill_width = available_width // columns
+        skill_height_item = available_height // rows
+
+        # 计算水平和垂直间距
+        horizontal_gap = skill_panel_padding
+        vertical_gap = skill_panel_padding
 
         # 绘制技能网格
         for i, key in enumerate(skill_keys):
@@ -11187,55 +12552,77 @@ class Game:
             skill = self.player.skills[key]
 
             # 计算技能在网格中的位置
-            row = i // 2  # 每行2个技能
-            col = i % 2  # 0或1列
+            row = i // columns  # 每行2个技能
+            col = i % columns  # 0或1列
 
             # 计算技能绘制的起始位置
-            skill_x = 10 + col * (skill_width + horizontal_gap)
-            skill_y = 10 + row * (skill_height_item + vertical_gap)
+            skill_x = skill_panel_padding + col * (skill_width + horizontal_gap // 2)
+            skill_y = skill_panel_padding + row * (skill_height_item + vertical_gap // 2)
 
             # 计算冷却状态
             cd_ratio = skill['current_cd'] / skill['cooldown'] if skill['current_cd'] > 0 else 0
             name_color = (255, 255, 0) if cd_ratio == 0 else (100, 100, 100)
 
+            # 技能名区域 - 适配文本长度
+            key_name = pygame.key.name(skill['key']).upper()
+            key_text = f"{key_name}: {skill['name']}"
+            skill_label = skill_font.render(key_text, True, name_color)
+
             # 绘制技能名称和按键
-            skill_bg.blit(skill_font.render(f"{pygame.key.name(skill['key']).upper()}: {skill['name']}", True, name_color),
-                          (skill_x, skill_y))
+            skill_bg.blit(skill_label, (skill_x, skill_y))
+
+            # 冷却条尺寸 - 基于技能区域尺寸
+            cooldown_width = int(skill_width * 0.85)  # 条宽为技能区块的85%
+            cooldown_height = max(1, int(skill_height_item * 0.15))  # 高度为技能区块的15%
+            cooldown_y = skill_y + skill_font_size + skill_panel_padding // 2
 
             # 绘制冷却条
             pygame.draw.rect(skill_bg, (80, 80, 80),
-                             (skill_x, skill_y + 20, skill_width - 20, 10))
-            pygame.draw.rect(skill_bg, (0, 200, 0),
-                             (skill_x, skill_y + 20, (skill_width - 20) * (1 - cd_ratio), 10))
+                             (skill_x, cooldown_y, cooldown_width, cooldown_height),
+                             border_radius=cooldown_height // 3)
 
-            # 如果技能有特殊参数，显示简短信息
-            if 'damage_multiple' in skill:
-                skill_bg.blit(skill_font.render(f"伤害: {skill['damage_multiple']}x", True, (200, 200, 200)),
-                              (skill_x, skill_y + 35))
-            elif 'heal_percent' in skill:
-                skill_bg.blit(skill_font.render(f"治疗: {int(skill['heal_percent'] * 100)}%/秒", True, (100, 255, 100)),
-                              (skill_x, skill_y + 35))
-
-        panel.blit(skill_bg, (20, current_y))
-        current_y += skill_height + section_gap
+            if cd_ratio < 1:  # 只有当冷却不完全时才绘制前景条
+                pygame.draw.rect(skill_bg, (0, 200, 0),
+                                 (skill_x, cooldown_y,
+                                  int(cooldown_width * (1 - cd_ratio)), cooldown_height),
+                                 border_radius=cooldown_height // 3)
 
         # ------ 消息日志区域 ------
-        log_height = SCREEN_HEIGHT - current_y - 20  # 动态计算剩余高度
-        log_bg = pygame.Surface((260, log_height), pygame.SRCALPHA)
+        # 动态计算日志区域高度 - 使用剩余屏幕空间
+        log_height = max(int(panel_width * 0.5), SCREEN_HEIGHT - current_y - int(panel_width * 0.08))
+        log_bg = pygame.Surface((content_width, log_height), pygame.SRCALPHA)
         log_bg.fill((40, 40, 60, 200))
-        pygame.draw.rect(log_bg, (80, 80, 100), (0, 0, 260, log_height), 2)
+        pygame.draw.rect(log_bg, (80, 80, 100), (0, 0, content_width, log_height), 2)
 
-        log_font = pygame.font.SysFont("SimSun", 16)
-        visible_messages = self.message_log[-self.max_log_lines:]
+        # 日志字体大小 - 基于面板宽度
+        log_font_size = int(panel_width * 0.06)
+        log_font = pygame.font.SysFont("SimSun", log_font_size)
+
+        # 计算可见行数 - 基于日志区域高度和字体大小
+        log_line_height = int(log_font_size * 1.2)  # 行高略大于字体大小，增加可读性
+        visible_line_count = (log_height - module_padding * 2) // log_line_height
+
+        # 获取最近的消息
+        visible_messages = self.message_log[-min(visible_line_count, self.max_log_lines):]
+
+        # 绘制消息
         for i, msg in enumerate(visible_messages):
             # 颜色逻辑保持不变
             text_surface = log_font.render(msg, True, self._get_message_color(msg))
-            log_bg.blit(text_surface, (10, 10 + i * 18))
 
-        panel.blit(log_bg, (20, current_y))
+            # 计算文本位置 - 保持适当边距
+            text_x = module_padding
+            text_y = module_padding + i * log_line_height
 
-        # 绘制到主屏幕左侧
-        self.screen.blit(panel, (MAP_WIDTH * TILE_SIZE, 0))
+            # 确保文本不会超出日志区域
+            if text_y + log_font_size < log_height - module_padding:
+                log_bg.blit(text_surface, (text_x, text_y))
+
+        panel.blit(log_bg, (module_padding, current_y))
+
+        # 绘制到主屏幕左侧 (基于地图尺寸自适应)
+        panel_x = MAP_WIDTH * TILE_SIZE
+        self.screen.blit(panel, (panel_x, 0))
 
 
     def _get_message_color(self, msg):
@@ -11251,296 +12638,421 @@ class Game:
         return (200, 200, 200)  # 默认灰色
 
     def draw_equipment(self, item):
+        """绘制优化后的装备图像，保持单位格的比例一致"""
         x = item.x * TILE_SIZE
         y = item.y * TILE_SIZE
-        anim_time = pygame.time.get_ticks()  # 用于动画效果
+        anim_time = pygame.time.get_ticks()
 
-        # 木剑
-        if item.item_type == "WOOD_SWORD":
-            # 剑柄 (深棕色)
-            pygame.draw.rect(self.screen, (101, 67, 33),
-                             (x + 12, y + 10, 6, 16))  # 垂直剑柄
-            # 护手 (铜色)
-            pygame.draw.rect(self.screen, (184, 115, 51),
-                             (x + 8, y + 20, 14, 4))
-            # 剑身 (木质纹理)
-            for i in range(3):
-                pygame.draw.line(self.screen, (139, 69, 19),
-                                 (x + 15, y + 5 - i), (x + 15, y + 25 + i), 3)
-            # 装饰绳结
-            pygame.draw.circle(self.screen, (139, 0, 0),
-                               (x + 15, y + 22), 3)
-            # 剑身反光
-            if anim_time % 1000 < 500:
-                pygame.draw.line(self.screen, (200, 200, 200, 100),
-                                 (x + 15, y + 5), (x + 15, y + 25), 1)
+        # 统一装备中心点与尺寸比例
+        center_x = x + TILE_SIZE // 2
+        center_y = y + TILE_SIZE // 2
+        item_scale = min(TILE_SIZE - 6, 30)  # 装备基础尺寸，确保不会溢出格子
 
-        # 青铜匕首
-        elif item.item_type == "BRONZE_DAGGER":
-            # 刀刃 (青铜色)
-            blade_color = (97, 153, 59)
-            blade_points = [
-                (x + 15, y + 5), (x + 20, y + 15), (x + 15, y + 25), (x + 10, y + 15)
-            ]
-            pygame.draw.polygon(self.screen, blade_color, blade_points)
-            # 刀柄 (木质)
-            pygame.draw.rect(self.screen, (139, 69, 19), (x + 13, y + 12, 5, 6))
-            # 刀柄装饰
-            pygame.draw.line(self.screen, (184, 115, 51),
-                             (x + 14, y + 13), (x + 17, y + 18), 2)
-            # 刀刃反光
-            if anim_time % 800 < 400:
-                pygame.draw.line(self.screen, (200, 200, 200, 100),
-                                 (x + 13, y + 10), (x + 17, y + 20), 1)
+        # 根据装备类型确定基础参数
+        is_weapon = "SWORD" in item.item_type or "DAGGER" in item.item_type or "SPEAR" in item.item_type
+        is_armor = "ARMOR" in item.item_type
 
-        # 钢匕首
-        elif item.item_type == "STEEL_DAGGER":
-            # 刀刃 (钢色)
-            blade_color = (192, 192, 192)
-            blade_points = [
-                (x + 12, y + 5), (x + 18, y + 15), (x + 12, y + 25)
-            ]
-            pygame.draw.polygon(self.screen, blade_color, blade_points)
-            # 刀柄 (皮革包裹)
-            pygame.draw.rect(self.screen, (139, 69, 19), (x + 10, y + 12, 8, 8))
-            # 刀柄装饰
-            for i in range(3):
-                pygame.draw.line(self.screen, (105, 105, 105),
-                                 (x + 11 + i * 2, y + 13), (x + 11 + i * 2, y + 19), 2)
-            # 动态反光
-            if anim_time % 600 < 300:
-                pygame.draw.line(self.screen, (255, 255, 255, 150),
-                                 (x + 13, y + 7), (x + 15, y + 23), 2)
+        # --------- 武器类 ---------
+        if is_weapon:
+            # 基础武器参数
+            blade_length = item_scale * 0.75
+            blade_width = item_scale * 0.18
+            handle_length = item_scale * 0.4
+            handle_width = item_scale * 0.12
 
-        # 铜剑
-        elif item.item_type == "COPPER_SWORD":
-            # 剑身 (铜色渐变)
-            for i in range(15):
-                color = (184, 115, 51, 255 - i * 10)
-                pygame.draw.line(self.screen, color,
-                                 (x + 12, y + 5 + i), (x + 18, y + 5 + i), 3)
-            # 剑柄 (缠绕皮革)
-            pygame.draw.rect(self.screen, (139, 69, 19), (x + 13, y + 20, 4, 8))
-            # 剑柄装饰
-            pygame.draw.line(self.screen, (105, 105, 105),
-                             (x + 13, y + 22), (x + 16, y + 25), 2)
-            # 动态铜锈效果
-            if anim_time % 1000 < 500:
+            # 武器朝向 - 右上角
+            angle = -30 if "DAGGER" in item.item_type else -45
+            blade_dir = pygame.math.Vector2(math.cos(math.radians(angle)), math.sin(math.radians(angle)))
+
+            # 计算刀刃终点
+            blade_end = (
+                center_x + blade_dir.x * blade_length,
+                center_y + blade_dir.y * blade_length
+            )
+
+            # 计算刀柄终点 - 方向相反
+            handle_end = (
+                center_x - blade_dir.x * handle_length,
+                center_y - blade_dir.y * handle_length
+            )
+
+            # 根据特定武器类型进行定制
+            if item.item_type == "WOOD_SWORD":
+                # 木剑 - 简朴的棕色系
+                # 剑柄
+                pygame.draw.line(self.screen, (101, 67, 33), (center_x, center_y), handle_end, int(handle_width))
+                # 护手
+                guard_width = handle_width * 2.5
+                guard_dir = pygame.math.Vector2(-blade_dir.y, blade_dir.x)  # 垂直于剑身方向
+                guard_start = (center_x + guard_dir.x * guard_width / 2, center_y + guard_dir.y * guard_width / 2)
+                guard_end = (center_x - guard_dir.x * guard_width / 2, center_y - guard_dir.y * guard_width / 2)
+                pygame.draw.line(self.screen, (139, 69, 19), guard_start, guard_end, int(handle_width * 0.8))
+                # 剑身
+                pygame.draw.line(self.screen, (160, 120, 80), (center_x, center_y), blade_end, int(blade_width))
+                # 剑身纹理
+                texture_dir = pygame.math.Vector2(blade_dir.x * 0.9, blade_dir.y * 0.9)
+                texture_length = blade_length * 0.8
+                texture_pos = (
+                center_x + texture_dir.x * texture_length / 3, center_y + texture_dir.y * texture_length / 3)
+                pygame.draw.line(self.screen, (139, 69, 19), texture_pos,
+                                 (texture_pos[0] + texture_dir.x * texture_length / 2,
+                                  texture_pos[1] + texture_dir.y * texture_length / 2), 1)
+
+            # 绘制格斯大剑
+            elif item.item_type == "GUTS_GREATSWORD":
+                # 调整绘制位置让剑居中
+                x = item.x * TILE_SIZE + TILE_SIZE // 3  # 稍微右移一点
+                y = item.y * TILE_SIZE + TILE_SIZE // 10  # 稍微下移
+
+                # 剑身 - 更窄更短
+                blade_color = (60, 60, 60)  # 深灰色的剑身
+                blade_width = TILE_SIZE // 3  # 更窄的剑身
+                blade_length = TILE_SIZE * 0.65  # 更短的剑身
+
+                # 剑身主体 - 用多边形绘制
+                blade_points = [
+                    (x, y + TILE_SIZE * 0.1),  # 左上
+                    (x + blade_width, y + TILE_SIZE * 0.1),  # 右上
+                    (x + blade_width, y + TILE_SIZE * 0.1 + blade_length),  # 右下
+                    (x, y + TILE_SIZE * 0.1 + blade_length)  # 左下
+                ]
+                pygame.draw.polygon(self.screen, blade_color, blade_points)
+
+                # 剑尖 - 三角形
+                tip_points = [
+                    (x, y + TILE_SIZE * 0.1),  # 左上连接点
+                    (x + blade_width, y + TILE_SIZE * 0.1),  # 右上连接点
+                    (x + blade_width // 2, y),  # 尖端
+                ]
+                pygame.draw.polygon(self.screen, blade_color, tip_points)
+
+                # 剑刃高光
+                pygame.draw.line(self.screen, (120, 120, 120),
+                                 (x, y + TILE_SIZE * 0.1),
+                                 (x, y + TILE_SIZE * 0.1 + blade_length), 2)
+
+                # 剑身中央凹槽
+                groove_x = x + blade_width // 3
+                pygame.draw.line(self.screen, (40, 40, 40),
+                                 (groove_x, y + TILE_SIZE * 0.15),
+                                 (groove_x, y + TILE_SIZE * 0.1 + blade_length - 0.05 * TILE_SIZE), 2)
+
+                # 护手 - 紧凑一些
+                guard_width = blade_width + TILE_SIZE // 6  # 小一点的护手
+                guard_height = TILE_SIZE // 7  # 更扁的护手
+                guard_y = y + TILE_SIZE * 0.1 + blade_length
+                pygame.draw.rect(self.screen, (100, 70, 40),
+                                 (x - (guard_width - blade_width) // 2,
+                                  guard_y,
+                                  guard_width, guard_height))
+
+                # 剑柄 - 短而粗
+                hilt_width = blade_width // 2
+                hilt_height = TILE_SIZE // 5  # 更短的剑柄
+                hilt_y = guard_y + guard_height
+                pygame.draw.rect(self.screen, (80, 50, 30),
+                                 (x + blade_width // 2 - hilt_width // 2,
+                                  hilt_y,
+                                  hilt_width, hilt_height))
+
+                # 剑柄纹理
+                for i in range(2):  # 减少纹理线条
+                    wrap_y = hilt_y + i * (hilt_height // 2) + hilt_height // 4
+                    pygame.draw.line(self.screen, (60, 40, 20),
+                                     (x + blade_width // 2 - hilt_width // 2, wrap_y),
+                                     (x + blade_width // 2 + hilt_width // 2, wrap_y), 1)
+
+                # 剑柄结尾球形装饰 - 小一点
+                pommel_radius = hilt_width // 2
+                pommel_y = hilt_y + hilt_height + pommel_radius // 2
+                pygame.draw.circle(self.screen, (120, 100, 50),
+                                   (x + blade_width // 2, pommel_y), pommel_radius)
+
+                # 血迹效果(可选)
+                if random.random() < 0.3:  # 30%概率显示血迹
+                    blood_points = []
+                    for _ in range(2):  # 减少血迹数量
+                        blood_x = x + random.randint(0, int(blade_width))
+                        blood_y = y + TILE_SIZE * 0.1 + random.randint(0, int(blade_length))
+                        blood_points.append((blood_x, blood_y))
+                        pygame.draw.circle(self.screen, (139, 0, 0, 150),
+                                           (blood_x, blood_y), random.randint(1, 2))  # 更小的血迹
+
+            elif "DAGGER" in item.item_type:
+                # 匕首系列 - 更短、更锋利
+                blade_color = (192, 192, 192)  # 默认钢色
+                handle_color = (101, 67, 33)  # 默认木质手柄
+
+                if "BRONZE" in item.item_type:
+                    blade_color = (184, 115, 51)  # 青铜色
+                elif "STEEL" in item.item_type:
+                    blade_color = (200, 200, 210)  # 钢色
+                    if "FINE" in item.item_type:
+                        blade_color = (220, 220, 230)  # 精钢更亮
+
+                # 匕首刀刃 - 小型三角形
+                blade_points = [
+                    center_x, center_y,
+                    blade_end[0] - blade_dir.y * blade_width / 2, blade_end[1] + blade_dir.x * blade_width / 2,
+                    blade_end[0], blade_end[1],
+                    blade_end[0] + blade_dir.y * blade_width / 2, blade_end[1] - blade_dir.x * blade_width / 2
+                ]
+                # 转换为坐标点列表
+                point_list = []
+                for i in range(0, len(blade_points), 2):
+                    point_list.append((blade_points[i], blade_points[i + 1]))
+                pygame.draw.polygon(self.screen, blade_color, point_list)
+
+                # 匕首手柄
+                pygame.draw.line(self.screen, handle_color, (center_x, center_y), handle_end, int(handle_width))
+
+                # 装饰物
+                if "FINE" in item.item_type:
+                    # 宝石装饰
+                    pygame.draw.circle(self.screen, (255, 0, 0),
+                                       (int(handle_end[0] + (center_x - handle_end[0]) * 0.3),
+                                        int(handle_end[1] + (center_y - handle_end[1]) * 0.3)),
+                                       int(handle_width * 0.8))
+
+                # 刀刃闪光
+                if anim_time % 800 < 400:
+                    glint_pos = (blade_end[0] - blade_dir.x * blade_length * 0.3,
+                                 blade_end[1] - blade_dir.y * blade_length * 0.3)
+                    pygame.draw.circle(self.screen, (255, 255, 255),
+                                       (int(glint_pos[0]), int(glint_pos[1])), 2)
+
+            elif "SWORD" in item.item_type:
+                # 定义剑的基本颜色
+                blade_color = (160, 160, 170)  # 默认剑刃色
+                handle_color = (101, 67, 33)  # 默认木质手柄
+                guard_color = (184, 115, 51)  # 默认护手色
+
+                # 根据具体类型定制颜色
+                if "COPPER" in item.item_type:
+                    blade_color = (184, 115, 51)  # 铜色
+                elif "IRON" in item.item_type:
+                    blade_color = (180, 180, 190)  # 铁色
+                    if "FINE" in item.item_type:
+                        blade_color = (200, 200, 210)  # 精铁更亮
+                        guard_color = (220, 220, 100)  # 金色护手
+
+                # 绘制剑刃
+                pygame.draw.line(self.screen, blade_color, (center_x, center_y), blade_end, int(blade_width))
+
+                # 护手 - 更大更明显
+                guard_width = blade_width * 3  # 更宽的护手
+                guard_dir = pygame.math.Vector2(-blade_dir.y, blade_dir.x)  # 垂直于剑身方向
+                guard_start = (center_x + guard_dir.x * guard_width / 2, center_y + guard_dir.y * guard_width / 2)
+                guard_end = (center_x - guard_dir.x * guard_width / 2, center_y - guard_dir.y * guard_width / 2)
+                pygame.draw.line(self.screen, guard_color, guard_start, guard_end, int(blade_width * 0.8))
+
+                # 剑柄
+                pygame.draw.line(self.screen, handle_color, (center_x, center_y), handle_end, int(handle_width))
+
+                # 特殊装饰和效果
+
+            elif "SPEAR" in item.item_type:
+                spear_dir = pygame.math.Vector2(0.1, -0.9).normalize()  # 垂直略带倾斜
+                spear_length = item_scale * 1.2  # 更长的矛
+                spear_width = item_scale * 0.08  # 更细的矛杆
+                spear_end = (center_x + spear_dir.x * spear_length,
+                             center_y + spear_dir.y * spear_length)
+                handle_end = (center_x - spear_dir.x * handle_length,
+                              center_y - spear_dir.y * handle_length)
+                pygame.draw.line(self.screen, (101, 67, 33), (center_x, center_y), handle_end, int(handle_width * 0.8))
+                pygame.draw.line(self.screen, (110, 95, 70), (center_x, center_y), spear_end, int(spear_width))
+
+                spear_head_size = spear_width * 2  # 更小的矛头
+                perp_dir = pygame.math.Vector2(-spear_dir.y, spear_dir.x)
+                tip_length = spear_width * 5  # 矛尖长度
+                side_width = spear_width * 1.5  # 侧面宽度
+                tip_point = spear_end  # 矛尖
+                back_point = (spear_end[0] - spear_dir.x * tip_length,
+                              spear_end[1] - spear_dir.y * tip_length)  # 矛尾
+                left_point = (back_point[0] + perp_dir.x * side_width,
+                              back_point[1] + perp_dir.y * side_width)  # 左侧
+                right_point = (back_point[0] - perp_dir.x * side_width,
+                               back_point[1] - perp_dir.y * side_width)  # 右侧
+
+                spear_head_points = [tip_point, left_point, back_point, right_point]
+                pygame.draw.polygon(self.screen, (180, 180, 190), spear_head_points)
+                pygame.draw.line(self.screen, (100, 100, 110),
+                                 spear_end,
+                                 back_point, 1)
+                # 装饰带 - 在手柄下方
+                band_pos_y = center_y - spear_dir.y * handle_length * 0.3
+                band_pos_x = center_x - spear_dir.x * handle_length * 0.3
+                band_dir = perp_dir  # 垂直于矛杆
+                band_start = (band_pos_x + band_dir.x * handle_width * 0.8,
+                              band_pos_y + band_dir.y * handle_width * 0.8)
+                band_end = (band_pos_x - band_dir.x * handle_width * 0.8,
+                            band_pos_y - band_dir.y * handle_width * 0.8)
+                pygame.draw.line(self.screen, (180, 0, 0), band_start, band_end, 2)
+                # 小金属链接件 - 在矛头与杆连接处
+                connector_pos = (back_point[0] + spear_dir.x * 2,
+                                 back_point[1] + spear_dir.y * 2)
+                pygame.draw.circle(self.screen, (160, 140, 60),
+                                   (int(connector_pos[0]), int(connector_pos[1])),
+                                   int(spear_width * 0.8))
+
+        # --------- 护甲类 ---------
+        elif is_armor:
+            armor_width = item_scale * 0.8
+            armor_height = item_scale * 1.0
+
+            # 基础护甲轮廓
+            armor_rect = pygame.Rect(
+                center_x - armor_width / 2,
+                center_y - armor_height / 2,
+                armor_width, armor_height
+            )
+
+            # 基本颜色与材质
+            primary_color = (100, 100, 110)  # 默认护甲颜色
+            accent_color = (150, 150, 160)  # 装饰颜色
+
+            if "WOOD" in item.item_type:
+                primary_color = (101, 67, 33)  # 木色
+                accent_color = (139, 69, 19)  # 深木色
+            elif "COPPER" in item.item_type:
+                primary_color = (184, 115, 51)  # 铜色
+                accent_color = (150, 90, 40)  # 深铜色
+            elif "IRON" in item.item_type:
+                primary_color = (120, 120, 130)  # 铁色
+                accent_color = (90, 90, 100)  # 深铁色
+            elif "STEEL" in item.item_type:
+                primary_color = (180, 180, 190)  # 钢色
+                accent_color = (140, 140, 150)  # 深钢色
+
+            # 闪电护甲特殊处理
+                # 红色闪电甲
+            if item.item_type == "LIGHTNING_ARMOR_RED":
+                # 盔甲基底
+                armor_color = (139, 0, 0) if (anim_time % 1000 < 500) else (178, 34, 34)
+                pygame.draw.rect(self.screen, armor_color,
+                                 (x + 5, y + 5, 22, 22), border_radius=5)
+
+                # 闪电核心纹路
+                lightning_points = [
+                    (x + 15, y + 8), (x + 20, y + 15),
+                    (x + 15, y + 22), (x + 10, y + 15)
+                ]
+                pygame.draw.polygon(self.screen, (255, 50, 50), lightning_points)
+
+                # 动态电弧效果
                 for i in range(3):
-                    spot_x = x + 12 + random.randint(0, 6)
-                    spot_y = y + 10 + random.randint(0, 15)
-                    pygame.draw.circle(self.screen, (50, 205, 50, 100),
-                                       (spot_x, spot_y), 1)
+                    angle = anim_time / 200 + i * 120
+                    start = (x + 15 + math.cos(math.radians(angle)) * 8,
+                             y + 15 + math.sin(math.radians(angle)) * 8)
+                    end = (start[0] + random.randint(-5, 5),
+                           start[1] + random.randint(-5, 5))
+                    pygame.draw.line(self.screen, (255, 100, 100),
+                                     start, end, 2)
 
-        # 铁剑
-        elif item.item_type == "IRON_SWORD":
-            # 剑身 (铁灰色)
-            pygame.draw.rect(self.screen, (105, 105, 105), (x + 12, y + 5, 6, 20))
-            # 剑刃 (高光)
-            pygame.draw.line(self.screen, (192, 192, 192),
-                             (x + 12, y + 5), (x + 12, y + 25), 2)
-            pygame.draw.line(self.screen, (192, 192, 192),
-                             (x + 18, y + 5), (x + 18, y + 25), 2)
-            # 剑柄 (皮革缠绕)
-            pygame.draw.rect(self.screen, (139, 69, 19), (x + 13, y + 20, 4, 8))
-            # 动态反光
-            if anim_time % 800 < 400:
-                pygame.draw.line(self.screen, (255, 255, 255, 150),
-                                 (x + 13, y + 7), (x + 15, y + 23), 2)
+            # 蓝色闪电甲
+            elif item.item_type == "LIGHTNING_ARMOR_BLUE":
+                # 盔甲基底
+                base_color = (30, 144, 255)
+                glow_color = (100, 149, 237) if (anim_time % 800 < 400) else (70, 130, 180)
 
-        # 精钢匕首
-        elif item.item_type == "FINE_STEEL_DAGGER":
-            # 刀刃 (精钢)
-            blade_color = (220, 220, 220)
-            blade_points = [
-                (x + 12, y + 5), (x + 18, y + 15), (x + 12, y + 25)
-            ]
-            pygame.draw.polygon(self.screen, blade_color, blade_points)
-            # 刀柄 (镶嵌宝石)
-            pygame.draw.rect(self.screen, (105, 105, 105), (x + 10, y + 12, 8, 8))
-            # 宝石装饰
-            pygame.draw.circle(self.screen, (255, 0, 0), (x + 14, y + 16), 2)
-            # 动态反光
-            if anim_time % 500 < 250:
-                pygame.draw.line(self.screen, (255, 255, 255, 200),
-                                 (x + 13, y + 7), (x + 15, y + 23), 3)
-
-        # 精铁长剑
-        elif item.item_type == "FINE_IRON_SWORD":
-            # 剑身 (精铁)
-            pygame.draw.rect(self.screen, (75, 75, 75), (x + 12, y + 5, 6, 20))
-            # 剑刃 (高光)
-            for i in range(3):
-                pygame.draw.line(self.screen, (192, 192, 192),
-                                 (x + 12 + i, y + 5 + i), (x + 12 + i, y + 25 - i), 1)
-            # 剑柄 (镶嵌宝石)
-            pygame.draw.rect(self.screen, (50, 50, 50), (x + 13, y + 20, 4, 8))
-            pygame.draw.circle(self.screen, (0, 0, 255), (x + 15, y + 24), 2)
-            # 动态反光
-            if anim_time % 600 < 300:
-                pygame.draw.line(self.screen, (255, 255, 255, 200),
-                                 (x + 13, y + 7), (x + 15, y + 23), 3)
-
-        # 格斯大剑
-        elif item.item_type == "GUTS_GREATSWORD":
-            # 剑身 (暗色)
-            pygame.draw.rect(self.screen, (50, 50, 50), (x + 8, y + 5, 14, 25))
-            # 剑刃 (锯齿状)
-            for i in range(5):
-                pygame.draw.line(self.screen, (105, 105, 105),
-                                 (x + 8 + i * 3, y + 5), (x + 8 + i * 3, y + 30), 2)
-            # 剑柄 (皮革缠绕)
-            pygame.draw.rect(self.screen, (139, 69, 19), (x + 13, y + 25, 4, 10))
-            # 动态血迹效果
-            if anim_time % 1000 < 500:
+                # 多层渐变
                 for i in range(3):
-                    spot_x = x + 8 + random.randint(0, 14)
-                    spot_y = y + 10 + random.randint(0, 20)
-                    pygame.draw.circle(self.screen, (139, 0, 0, 150),
-                                       (spot_x, spot_y), 2)
+                    alpha = 200 - i * 50
+                    layer = pygame.Surface((22, 22), pygame.SRCALPHA)
+                    pygame.draw.rect(layer, (*base_color, alpha),
+                                     (0, 0, 22, 22), border_radius=5 - i * 2)
+                    self.screen.blit(layer, (x + 5 + i, y + 5 + i))
 
-        # 木板甲
-        elif item.item_type == "WOOD_ARMOR":
-            # 主体 (木质)
-            pygame.draw.rect(self.screen, (101, 67, 33), (x + 8, y + 8, 15, 20))
-            # 木板纹理
-            for i in range(3):
-                pygame.draw.line(self.screen, (139, 69, 19),
-                                 (x + 8, y + 10 + i * 6), (x + 23, y + 10 + i * 6), 3)
-            # 铆钉装饰
-            for i in range(2):
-                for j in range(3):
-                    pygame.draw.circle(self.screen, (184, 115, 51),
-                                       (x + 10 + i * 10, y + 12 + j * 6), 2)
+                # 冰裂纹效果
+                for _ in range(8):
+                    crack_start = (x + 5 + random.randint(2, 20),
+                                   y + 5 + random.randint(2, 20))
+                    crack_end = (crack_start[0] + random.randint(-4, 4),
+                                 crack_start[1] + random.randint(-4, 4))
+                    pygame.draw.line(self.screen, (200, 230, 255),
+                                     crack_start, crack_end, 1)
 
-        # 铜板甲
-        elif item.item_type == "COPPER_ARMOR":
-            # 主体 (铜色)
-            pygame.draw.rect(self.screen, (184, 115, 51), (x + 8, y + 8, 15, 20))
-            # 装饰条纹
-            for i in range(3):
-                pygame.draw.line(self.screen, (139, 69, 19),
-                                 (x + 8, y + 10 + i * 6), (x + 23, y + 10 + i * 6), 2)
-            # 动态铜锈
-            if anim_time % 1200 < 600:
+                # 闪电核心
+                core_points = [
+                    (x + 16, y + 8), (x + 22, y + 16), (x + 16, y + 24),
+                    (x + 10, y + 16), (x + 16, y + 8)
+                ]
+                pygame.draw.polygon(self.screen, (30, 144, 255), core_points, 2)
+
+            # 黄色闪电甲
+            elif item.item_type == "LIGHTNING_ARMOR_YELLOW":
+                # 黄金基底
+                gold_color = (218, 165, 32)
+                pygame.draw.rect(self.screen, gold_color,
+                                 (x + 5, y + 5, 22, 22), border_radius=5)
+
+                # 浮雕装饰
+                pygame.draw.rect(self.screen, (139, 69, 19),
+                                 (x + 9, y + 9, 14, 14), border_radius=3)
+
+                # 动态闪电
                 for i in range(3):
-                    spot_x = x + 8 + random.randint(0, 15)
-                    spot_y = y + 8 + random.randint(0, 20)
-                    pygame.draw.circle(self.screen, (50, 205, 50, 100),
-                                       (spot_x, spot_y), 2)
+                    phase = (anim_time + i * 300) % 1000
+                    if phase < 500:
+                        alpha = int(255 * (1 - phase / 500))
+                        lightning_points = [
+                            (x + 5 + phase // 25, y + 5),
+                            (x + 20, y + 15),
+                            (x + 5 + phase // 25, y + 25)
+                        ]
+                        pygame.draw.lines(self.screen, (255, 215, 0, alpha),
+                                          False, lightning_points, 3)
 
-        # 铁板甲
-        elif item.item_type == "IRON_ARMOR":
-            # 主体 (铁灰色)
-            pygame.draw.rect(self.screen, (105, 105, 105), (x + 8, y + 8, 15, 20))
-            # 铆钉装饰
-            for i in range(2):
-                for j in range(3):
-                    pygame.draw.circle(self.screen, (192, 192, 192),
-                                       (x + 10 + i * 10, y + 12 + j * 6), 2)
-            # 动态反光
-            if anim_time % 800 < 400:
-                pygame.draw.line(self.screen, (255, 255, 255, 100),
-                                 (x + 8, y + 10), (x + 23, y + 25), 2)
+                # 神圣光晕
+                if anim_time % 1000 < 500:
+                    halo = pygame.Surface((30, 30), pygame.SRCALPHA)
+                    radius = 15 + int(5 * math.sin(anim_time / 200))
+                    pygame.draw.circle(halo, (255, 255, 0, 50),
+                                       (15, 15), radius)
+                    self.screen.blit(halo, (x - 2, y - 2))
+            else:
+                # 非闪电护甲标准绘制
+                pygame.draw.rect(self.screen, primary_color, armor_rect, border_radius=int(armor_width * 0.15))
 
-        # 钢板甲
-        elif item.item_type == "STEEL_ARMOR":
-            # 主体 (钢色)
-            pygame.draw.rect(self.screen, (192, 192, 192), (x + 8, y + 8, 15, 20))
-            # 装饰条纹
-            for i in range(3):
-                pygame.draw.line(self.screen, (105, 105, 105),
-                                 (x + 8, y + 10 + i * 6), (x + 23, y + 10 + i * 6), 2)
-            # 动态反光
-            if anim_time % 600 < 300:
-                pygame.draw.line(self.screen, (255, 255, 255, 150),
-                                 (x + 8, y + 10), (x + 23, y + 25), 3)
+                # 添加装饰条纹
+                stripe_count = 3
+                stripe_height = armor_height / (stripe_count + 1)
 
-        # 红色闪电甲
-        elif item.item_type == "LIGHTNING_ARMOR_RED":
-            # 盔甲基底
-            armor_color = (139, 0, 0) if (anim_time % 1000 < 500) else (178, 34, 34)
-            pygame.draw.rect(self.screen, armor_color,
-                             (x + 5, y + 5, 22, 22), border_radius=5)
+                for i in range(stripe_count):
+                    stripe_y = armor_rect.y + (i + 1) * stripe_height
+                    pygame.draw.line(self.screen, accent_color,
+                                     (armor_rect.x + armor_width * 0.2, stripe_y),
+                                     (armor_rect.x + armor_width * 0.8, stripe_y),
+                                     max(1, int(armor_width * 0.06)))
 
-            # 闪电核心纹路
-            lightning_points = [
-                (x + 15, y + 8), (x + 20, y + 15),
-                (x + 15, y + 22), (x + 10, y + 15)
-            ]
-            pygame.draw.polygon(self.screen, (255, 50, 50), lightning_points)
+                # 铆钉装饰
+                rivet_size = max(1, int(armor_width * 0.08))
+                for i in range(2):
+                    for j in range(2):
+                        rivet_x = armor_rect.x + armor_width * (0.25 + i * 0.5)
+                        rivet_y = armor_rect.y + armor_height * (0.25 + j * 0.5)
+                        pygame.draw.circle(self.screen, (200, 200, 200), (int(rivet_x), int(rivet_y)), rivet_size)
 
-            # 动态电弧效果
-            for i in range(3):
-                angle = anim_time / 200 + i * 120
-                start = (x + 15 + math.cos(math.radians(angle)) * 8,
-                         y + 15 + math.sin(math.radians(angle)) * 8)
-                end = (start[0] + random.randint(-5, 5),
-                       start[1] + random.randint(-5, 5))
-                pygame.draw.line(self.screen, (255, 100, 100),
-                                 start, end, 2)
+                # 特殊材质效果
+                if "WOOD" in item.item_type:
+                    # 木纹
+                    for i in range(4):
+                        grain_y = armor_rect.y + i * armor_height / 4 + armor_height / 8
+                        grain_curve = math.sin(i + anim_time / 2000) * armor_width / 8
+                        pygame.draw.line(self.screen, (139, 69, 19),
+                                         (armor_rect.x + armor_width * 0.2, grain_y + grain_curve),
+                                         (armor_rect.x + armor_width * 0.8, grain_y - grain_curve),
+                                         1)
 
-        # 蓝色闪电甲
-        elif item.item_type == "LIGHTNING_ARMOR_BLUE":
-            # 盔甲基底
-            base_color = (30, 144, 255)
-            glow_color = (100, 149, 237) if (anim_time % 800 < 400) else (70, 130, 180)
-
-            # 多层渐变
-            for i in range(3):
-                alpha = 200 - i * 50
-                layer = pygame.Surface((22, 22), pygame.SRCALPHA)
-                pygame.draw.rect(layer, (*base_color, alpha),
-                                 (0, 0, 22, 22), border_radius=5 - i * 2)
-                self.screen.blit(layer, (x + 5 + i, y + 5 + i))
-
-            # 冰裂纹效果
-            for _ in range(8):
-                crack_start = (x + 5 + random.randint(2, 20),
-                               y + 5 + random.randint(2, 20))
-                crack_end = (crack_start[0] + random.randint(-4, 4),
-                             crack_start[1] + random.randint(-4, 4))
-                pygame.draw.line(self.screen, (200, 230, 255),
-                                 crack_start, crack_end, 1)
-
-            # 闪电核心
-            core_points = [
-                (x + 16, y + 8), (x + 22, y + 16), (x + 16, y + 24),
-                (x + 10, y + 16), (x + 16, y + 8)
-            ]
-            pygame.draw.polygon(self.screen, (30, 144, 255), core_points, 2)
-
-        # 黄色闪电甲
-        elif item.item_type == "LIGHTNING_ARMOR_YELLOW":
-            # 黄金基底
-            gold_color = (218, 165, 32)
-            pygame.draw.rect(self.screen, gold_color,
-                             (x + 5, y + 5, 22, 22), border_radius=5)
-
-            # 浮雕装饰
-            pygame.draw.rect(self.screen, (139, 69, 19),
-                             (x + 9, y + 9, 14, 14), border_radius=3)
-
-            # 动态闪电
-            for i in range(3):
-                phase = (anim_time + i * 300) % 1000
-                if phase < 500:
-                    alpha = int(255 * (1 - phase / 500))
-                    lightning_points = [
-                        (x + 5 + phase // 25, y + 5),
-                        (x + 20, y + 15),
-                        (x + 5 + phase // 25, y + 25)
-                    ]
-                    pygame.draw.lines(self.screen, (255, 215, 0, alpha),
-                                      False, lightning_points, 3)
-
-            # 神圣光晕
-            if anim_time % 1000 < 500:
-                halo = pygame.Surface((30, 30), pygame.SRCALPHA)
-                radius = 15 + int(5 * math.sin(anim_time / 200))
-                pygame.draw.circle(halo, (255, 255, 0, 50),
-                                   (15, 15), radius)
-                self.screen.blit(halo, (x - 2, y - 2))
+                elif "COPPER" in item.item_type:
+                    # 铜锈斑点
+                    if anim_time % 2000 < 1000:
+                        for _ in range(3):
+                            patina_x = armor_rect.x + random.uniform(0, armor_width)
+                            patina_y = armor_rect.y + random.uniform(0, armor_height)
+                            pygame.draw.circle(self.screen, (0, 150, 100),
+                                               (int(patina_x), int(patina_y)),
+                                               max(1, int(armor_width * 0.06)))
 
     def draw(self):
         # 绘制静态背景
@@ -11592,19 +13104,7 @@ class Game:
         for item in self.items:
 
             self.draw_equipment(item)
-            # 宝箱
-            if item.item_type == "CHEST":
-                self.draw_chest(item)
-                continue
-
-            # 药水
-            elif "HP_" in item.item_type:
-                self.draw_hp(item)
-                continue
-
-            # 宝石类
-            elif "GEM" in item.item_type:
-                self.draw_gem(item)
+            self.draw_item_with_rarity(item)
 
         for monster in self.monsters:
             x = monster.x * TILE_SIZE
@@ -11929,6 +13429,8 @@ class Game:
                     continue
                 if event.key == pygame.K_b:
                     shop_screen(self.screen, self.player, self.floor)
+                if event.key == pygame.K_n:
+                    self.show_encyclopedia()
                 elif event.key == pygame.K_w:
                     self.player.move(0, -1, self)
                 elif event.key == pygame.K_s:
